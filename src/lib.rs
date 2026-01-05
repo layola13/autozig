@@ -35,11 +35,9 @@
 //!     fn compute_hash(data: &[u8]) -> u64;
 //! }
 //!
-//! fn main() {
-//!     let data = b"Hello AutoZig";
-//!     let hash = compute_hash(data); // Safe call, no unsafe needed!
-//!     println!("Hash: {}", hash);
-//! }
+//! let data = b"Hello AutoZig";
+//! let hash = compute_hash(data); // Safe call, no unsafe needed!
+//! println!("Hash: {}", hash);
 //! ```
 
 #![forbid(unsafe_code)]

@@ -1,0 +1,15 @@
+[package]
+name = "autozig-example-zig-c"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+autozig = { path = "../.." }
+
+[build-dependencies]
+autozig-build = { path = "../../gen/build" }
+anyhow = "1.0"
+
+[[bin]]
+name = "zig-c-example"
+path = "src/main.rs"

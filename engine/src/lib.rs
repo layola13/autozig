@@ -88,9 +88,9 @@ impl AutoZigEngine {
         let rust_target = env::var("TARGET").unwrap_or_else(|_| "native".to_string());
         let zig_target = rust_to_zig_target(&rust_target);
 
-        // Step 5: Compile Zig code
+        // Step 5: Compile Zig code (pass src_dir to find C sources)
         let compiler = ZigCompiler::new();
-        compiler.compile_with_target(&zig_file, &lib_path, zig_target)?;
+        compiler.compile_with_target_and_src(&zig_file, &lib_path, zig_target, &self.src_dir)?;
 
         // Step 6: Save hash for incremental compilation
         fs::write(&hash_file, &code_hash).context("Failed to write hash file")?;

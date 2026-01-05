@@ -52,13 +52,26 @@ impl ZigCompiler {
     ) -> Result<()> {
         println!("cargo:warning=Compiling Zig code: {} for target: {}", source.display(), target);
 
+        // 查找同目录下的所有 C 源文件
+        let c_sources = self.find_c_sources(source)?;
+
+        if !c_sources.is_empty() {
+            println!(
+                "cargo:warning=Found {} C source file(s) to compile with Zig",
+                c_sources.len()
+            );
+            for c_file in &c_sources {
+                println!("cargo:warning=  - {}", c_file.display());
+            }
+        }
+
         // zig build-lib source.zig -static -femit-bin=output.a -target <target> -fPIC
         // -lc NOTE: We removed -femit-h because it's experimental and unstable
         // FFI bindings will be generated directly from Rust signatures (IDL-driven)
         // -fPIC is required for linking with PIE executables (Rust default)
         // -lc is required for linking with libc (needed for c_allocator)
-        let status = Command::new(&self.zig_path)
-            .arg("build-lib")
+        let mut cmd = Command::new(&self.zig_path);
+        cmd.arg("build-lib")
             .arg(source)
             .arg("-static")
             .arg(format!("-femit-bin={}", output_lib.display()))
@@ -70,9 +83,14 @@ impl ZigCompiler {
             .arg("-lc")
             // Optimize for release builds
             .arg("-O")
-            .arg("ReleaseFast")
-            .status()
-            .context("Failed to execute zig build-lib")?;
+            .arg("ReleaseFast");
+
+        // 添加所有 C 源文件到编译命令
+        for c_file in &c_sources {
+            cmd.arg(c_file);
+        }
+
+        let status = cmd.status().context("Failed to execute zig build-lib")?;
 
         if !status.success() {
             anyhow::bail!("Zig compilation failed");
@@ -82,6 +100,111 @@ impl ZigCompiler {
         println!("cargo:warning=Library: {}", output_lib.display());
 
         Ok(())
+    }
+
+    /// Compile with target and search for C sources in the provided src
+    /// directory
+    ///
+    /// # Arguments
+    /// * `source` - Path to .zig source file (usually in OUT_DIR)
+    /// * `output_lib` - Path for output static library (.a)
+    /// * `target` - Target triple (e.g., "x86_64-linux-gnu", "native")
+    /// * `src_dir` - Original source directory to search for C files
+    pub fn compile_with_target_and_src(
+        &self,
+        source: &Path,
+        output_lib: &Path,
+        target: &str,
+        src_dir: &Path,
+    ) -> Result<()> {
+        println!("cargo:warning=Compiling Zig code: {} for target: {}", source.display(), target);
+
+        // 在原始源码目录查找 C 源文件
+        let c_sources = self.find_c_sources_in_dir(src_dir)?;
+
+        if !c_sources.is_empty() {
+            println!(
+                "cargo:warning=Found {} C source file(s) to compile with Zig",
+                c_sources.len()
+            );
+            for c_file in &c_sources {
+                println!("cargo:warning=  - {}", c_file.display());
+            }
+        }
+
+        let mut cmd = Command::new(&self.zig_path);
+        cmd.arg("build-lib")
+            .arg(source)
+            .arg("-static")
+            .arg(format!("-femit-bin={}", output_lib.display()))
+            .arg("-target")
+            .arg(target)
+            .arg("-fPIC")
+            .arg("-lc")
+            .arg("-O")
+            .arg("ReleaseFast");
+
+        // 添加所有 C 源文件到编译命令
+        for c_file in &c_sources {
+            cmd.arg(c_file);
+        }
+
+        let status = cmd.status().context("Failed to execute zig build-lib")?;
+
+        if !status.success() {
+            anyhow::bail!("Zig compilation failed");
+        }
+
+        println!("cargo:warning=Zig compilation successful");
+        println!("cargo:warning=Library: {}", output_lib.display());
+
+        Ok(())
+    }
+
+    /// Find all C source files in a specific directory
+    fn find_c_sources_in_dir(&self, dir: &Path) -> Result<Vec<std::path::PathBuf>> {
+        let mut c_sources = Vec::new();
+
+        if dir.exists() {
+            for entry in std::fs::read_dir(dir)? {
+                let entry = entry?;
+                let path = entry.path();
+
+                if path.is_file() {
+                    if let Some(ext) = path.extension() {
+                        if ext == "c" {
+                            c_sources.push(path);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(c_sources)
+    }
+
+    /// Find all C source files in the same directory as the Zig source
+    fn find_c_sources(&self, zig_source: &Path) -> Result<Vec<std::path::PathBuf>> {
+        let mut c_sources = Vec::new();
+
+        if let Some(parent) = zig_source.parent() {
+            if parent.exists() {
+                for entry in std::fs::read_dir(parent)? {
+                    let entry = entry?;
+                    let path = entry.path();
+
+                    if path.is_file() {
+                        if let Some(ext) = path.extension() {
+                            if ext == "c" {
+                                c_sources.push(path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(c_sources)
     }
 
     /// Compile with native target (convenience method)

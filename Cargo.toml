@@ -36,7 +36,8 @@ members = [
     "examples/trait_hasher",
     "examples/security_tests",
     "examples/generics",
-    "examples/async"
+    "examples/async",
+    "examples/zig-c"
 ]
 
 [features]

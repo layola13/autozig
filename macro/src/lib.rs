@@ -254,7 +254,7 @@ fn generate_trait_implementations(config: &AutoZigConfig) -> proc_macro2::TokenS
 
                 // Phase 2: Inject self pointer for opaque types
                 if trait_impl.is_opaque {
-                    ffi_args.push(inject_self_pointer(&method_sig));
+                    ffi_args.push(inject_self_pointer(method_sig));
                 }
 
                 for input in &method_sig.inputs {
@@ -446,7 +446,7 @@ fn generate_trait_ffi_declarations(config: &AutoZigConfig) -> proc_macro2::Token
 
             // Phase 2: Add self pointer parameter for opaque types
             if trait_impl.is_opaque {
-                let self_param = handle_receiver_type(&method_sig);
+                let self_param = handle_receiver_type(method_sig);
                 if !self_param.is_empty() {
                     ffi_params.push(self_param);
                 }
@@ -479,12 +479,10 @@ fn generate_trait_ffi_declarations(config: &AutoZigConfig) -> proc_macro2::Token
                             } else {
                                 quote! { *const #elem }
                             }
+                        } else if is_mut {
+                            quote! { *mut u8 }
                         } else {
-                            if is_mut {
-                                quote! { *mut u8 }
-                            } else {
-                                quote! { *const u8 }
-                            }
+                            quote! { *const u8 }
                         };
 
                         let ptr_name = quote::format_ident!("{}_ptr", param_name_str);
@@ -680,6 +678,7 @@ fn generate_struct_definitions_for_include(config: &IncludeZigConfig) -> proc_ma
     }
 }
 
+#[allow(dead_code)]
 fn generate_ffi_declarations_for_include(config: &IncludeZigConfig) -> proc_macro2::TokenStream {
     let mut decls = Vec::new();
 
@@ -706,12 +705,10 @@ fn generate_ffi_declarations_for_include(config: &IncludeZigConfig) -> proc_macr
                         } else {
                             quote! { *const #elem }
                         }
+                    } else if is_mut {
+                        quote! { *mut u8 }
                     } else {
-                        if is_mut {
-                            quote! { *mut u8 }
-                        } else {
-                            quote! { *const u8 }
-                        }
+                        quote! { *const u8 }
                     };
 
                     let ptr_name = quote::format_ident!("{}_ptr", param_name_str);
@@ -738,6 +735,7 @@ fn generate_ffi_declarations_for_include(config: &IncludeZigConfig) -> proc_macr
     }
 }
 
+#[allow(dead_code)]
 fn generate_safe_wrappers_for_include(config: &IncludeZigConfig) -> proc_macro2::TokenStream {
     let mut wrappers = Vec::new();
     let mod_name_str = config.get_unique_mod_name();
@@ -787,6 +785,7 @@ fn generate_safe_wrappers_for_include(config: &IncludeZigConfig) -> proc_macro2:
     }
 }
 
+#[allow(dead_code)]
 fn generate_trait_impl_types_for_include(config: &IncludeZigConfig) -> proc_macro2::TokenStream {
     let mut type_defs = Vec::new();
 
@@ -807,6 +806,7 @@ fn generate_trait_impl_types_for_include(config: &IncludeZigConfig) -> proc_macr
     }
 }
 
+#[allow(dead_code)]
 fn generate_trait_implementations_for_include(
     config: &IncludeZigConfig,
 ) -> proc_macro2::TokenStream {
@@ -933,12 +933,10 @@ fn generate_single_ffi_declaration(
                     } else {
                         quote! { *const #elem }
                     }
+                } else if is_mut {
+                    quote! { *mut u8 }
                 } else {
-                    if is_mut {
-                        quote! { *mut u8 }
-                    } else {
-                        quote! { *const u8 }
-                    }
+                    quote! { *const u8 }
                 };
 
                 let ptr_name = quote::format_ident!("{}_ptr", param_name_str);
@@ -1059,14 +1057,13 @@ fn substitute_generic_type(sig: &syn::Signature, concrete_type: &str) -> syn::Si
     // Substitute type in parameters
     for input in &mut new_sig.inputs {
         if let syn::FnArg::Typed(pat_type) = input {
-            pat_type.ty =
-                Box::new(substitute_type_recursive(&pat_type.ty, &generic_name, &concrete_ty));
+            *pat_type.ty = substitute_type_recursive(&pat_type.ty, &generic_name, &concrete_ty);
         }
     }
 
     // Substitute type in return type
     if let syn::ReturnType::Type(_, ret_ty) = &mut new_sig.output {
-        *ret_ty = Box::new(substitute_type_recursive(ret_ty, &generic_name, &concrete_ty));
+        **ret_ty = substitute_type_recursive(ret_ty, &generic_name, &concrete_ty);
     }
 
     new_sig
@@ -1089,14 +1086,13 @@ fn substitute_type_recursive(
         },
         syn::Type::Reference(type_ref) => {
             let mut new_ref = type_ref.clone();
-            new_ref.elem =
-                Box::new(substitute_type_recursive(&type_ref.elem, generic_name, concrete_ty));
+            *new_ref.elem = substitute_type_recursive(&type_ref.elem, generic_name, concrete_ty);
             syn::Type::Reference(new_ref)
         },
         syn::Type::Slice(type_slice) => {
             let mut new_slice = type_slice.clone();
-            new_slice.elem =
-                Box::new(substitute_type_recursive(&type_slice.elem, generic_name, concrete_ty));
+            *new_slice.elem =
+                substitute_type_recursive(&type_slice.elem, generic_name, concrete_ty);
             syn::Type::Slice(new_slice)
         },
         _ => ty.clone(),
@@ -1128,12 +1124,10 @@ fn generate_ffi_declaration_from_sig(
                     } else {
                         quote! { *const #elem }
                     }
+                } else if is_mut {
+                    quote! { *mut u8 }
                 } else {
-                    if is_mut {
-                        quote! { *mut u8 }
-                    } else {
-                        quote! { *const u8 }
-                    }
+                    quote! { *const u8 }
                 };
 
                 let ptr_name = quote::format_ident!("{}_ptr", param_name_str);
