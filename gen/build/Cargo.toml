@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Build-time support for autozig"
+repository = "https://github.com/layola13/autozig"
+homepage = "https://github.com/layola13/autozig"
+documentation = "https://docs.rs/autozig-build"
+keywords = ["ffi", "zig", "build"]
+categories = ["development-tools::ffi", "development-tools::build-utils"]
 
 [dependencies]
 autozig-engine = { path = "../../engine", version = "0.1.0" }

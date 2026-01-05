@@ -224,7 +224,7 @@ fn parse_rust_definitions(
 
     // First, try to parse the entire input as a token stream
     // This handles struct definitions better
-    let input_normalized = input.replace('\n', " ").replace('\r', " ");
+    let input_normalized = input.replace(['\n', '\r'], " ");
     let input_normalized = input_normalized
         .split_whitespace()
         .collect::<Vec<_>>()

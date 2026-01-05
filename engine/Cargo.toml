@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Core engine for autozig code generation"
+repository = "https://github.com/layola13/autozig"
+homepage = "https://github.com/layola13/autozig"
+documentation = "https://docs.rs/autozig-engine"
+keywords = ["ffi", "zig", "codegen"]
+categories = ["development-tools::ffi", "api-bindings"]
 
 [dependencies]
 autozig-parser = { path = "../parser", version = "0.1.0" }

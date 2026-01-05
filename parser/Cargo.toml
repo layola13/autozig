@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Parser for autozig macro directives"
+repository = "https://github.com/layola13/autozig"
+homepage = "https://github.com/layola13/autozig"
+documentation = "https://docs.rs/autozig-parser"
+keywords = ["ffi", "zig", "parser"]
+categories = ["development-tools::ffi", "parser-implementations"]
 
 [dependencies]
 syn = { version = "2.0", features = ["full", "parsing", "printing"] }
