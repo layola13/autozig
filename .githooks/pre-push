@@ -12,8 +12,6 @@ NC='\033[0m' # No Color
 
 echo -e "${YELLOW}🔍 Running pre-push checks...${NC}"
 
-cd autozig
-
 # Check 1: Format check
 echo -e "\n${YELLOW}📝 Checking code formatting...${NC}"
 if ! cargo fmt --all -- --check; then
@@ -59,13 +57,11 @@ echo -e "${GREEN}✅ Doc tests passed${NC}"
 # Check 6: Examples verification (optional, can be slow)
 if [ "$SKIP_EXAMPLES" != "1" ]; then
     echo -e "\n${YELLOW}🎯 Verifying examples...${NC}"
-    cd examples
-    if ! timeout 300 ./verify_all.sh 2>&1 | tail -15; then
+    if ! (cd examples && timeout 300 ./verify_all.sh 2>&1 | tail -15); then
         echo -e "${RED}❌ Examples verification failed!${NC}"
         echo -e "${YELLOW}💡 Set SKIP_EXAMPLES=1 to skip this check${NC}"
         exit 1
     fi
-    cd ..
     echo -e "${GREEN}✅ All examples verified${NC}"
 else
     echo -e "${YELLOW}⏭️  Skipping examples verification (SKIP_EXAMPLES=1)${NC}"
