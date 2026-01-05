@@ -1,0 +1,32 @@
+[package]
+name = "autozig-security-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+autozig = { path = "../.." }
+
+[build-dependencies]
+autozig-build = { path = "../../gen/build" }
+anyhow = "1.0"
+
+# 安全测试说明：
+# 本项目包含故意引入的安全漏洞示例，用于验证 AutoZig 是否会暴露这些问题
+# 
+# ⚠️ 警告：这些代码仅用于安全测试和教育目的，请勿在生产环境使用！
+#
+# 测试方法：
+# 1. AddressSanitizer (ASan) - 检测内存错误：
+#    RUSTFLAGS="-Z sanitizer=address" cargo +nightly run
+#
+# 2. ThreadSanitizer (TSan) - 检测数据竞争：
+#    RUSTFLAGS="-Z sanitizer=thread" cargo +nightly run
+#
+# 3. Valgrind - 内存泄漏检测：
+#    valgrind --leak-check=full target/debug/autozig-security-tests
+#
+# 4. Miri - UB 检测器：
+#    cargo +nightly miri run
+#
+# 5. Zig Debug 模式（自动边界检查）：
+#    默认 Debug 模式已启用

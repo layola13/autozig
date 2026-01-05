@@ -31,7 +31,8 @@ members = [
     "examples/smart_lowering",
     "examples/external",
     "examples/trait_calculator",
-    "examples/trait_hasher"
+    "examples/trait_hasher",
+    "examples/security_tests"
 ]
 
 [features]

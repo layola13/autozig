@@ -163,8 +163,13 @@ fn extract_zig_from_tokens(tokens: &str) -> Option<String> {
     };
     
     // Split by --- separator (Zig code comes before ---)
-    let parts: Vec<&str> = content.split("---").collect();
-    let zig_section = parts[0].trim();
+    // Only take the first part (before ---)
+    let zig_section = if let Some(separator_pos) = content.find("---") {
+        content[..separator_pos].trim()
+    } else {
+        // No separator, take all content
+        content.trim()
+    };
     
     if zig_section.is_empty() {
         None
@@ -250,9 +255,12 @@ mod tests {
         }"#;
         
         let result = extract_zig_from_tokens(tokens).unwrap();
+        // Should contain Zig code
         assert!(result.contains("export fn add"));
+        assert!(result.contains("const std"));
+        // Should NOT contain separator or Rust signatures (look for -> which is Rust-specific)
         assert!(!result.contains("---"));
-        assert!(!result.contains("fn add(a: i32"));
+        assert!(!result.contains("-> i32;"));  // Rust return type syntax
     }
     
     #[test]
