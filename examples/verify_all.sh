@@ -124,6 +124,7 @@ main() {
         "Security Tests:security_tests"
         "Generics (Phase 3):generics"
         "Async FFI (Phase 3):async"
+        "Zig-C Interop:zig-c"
     )
     
     # 遍历所有示例
