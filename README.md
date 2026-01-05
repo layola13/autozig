@@ -569,6 +569,6 @@ at your option.
 
 **Made with ❤️ for the Rust and Zig communities**
 
-[⭐ Star on GitHub](https://github.com/yourusername/autozig) • [🐛 Report Issues](https://github.com/yourusername/autozig/issues) • [📖 Read Docs](.)
+[⭐ Star on GitHub](https://github.com/layola13/autozig) • [🐛 Report Issues](https://github.com/layola13/autozig/issues) • [📖 Read Docs](.)
 
 </div>
