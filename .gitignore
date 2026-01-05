@@ -1,0 +1,33 @@
+# Rust
+/target
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# Build outputs
+/autozig/target
+/demo/target
+/engine/target
+/parser/target
+/macro/target
+/gen/build/target
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated files
+*.a
+*.so
+*.dylib
+*.dll
+*.h
+bindings.rs
+generated_autozig.zig

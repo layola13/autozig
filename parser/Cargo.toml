@@ -1,0 +1,11 @@
+[package]
+name = "autozig-parser"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Parser for autozig macro directives"
+
+[dependencies]
+syn = { version = "2.0", features = ["full", "parsing", "printing"] }
+quote = "1.0"
+proc-macro2 = "1.0"

@@ -1,0 +1,18 @@
+[package]
+name = "autozig-example-external"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+autozig = { path = "../.." }
+
+[build-dependencies]
+autozig-build = { path = "../../gen/build" }
+
+[[bin]]
+name = "autozig-example-external"
+path = "src/main.rs"
+
+[[bin]]
+name = "test-zig-lib"
+path = "src/test_zig_lib.rs"

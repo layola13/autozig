@@ -1,0 +1,10 @@
+[package]
+name = "autozig-build"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Build-time support for autozig"
+
+[dependencies]
+autozig-engine = { path = "../../engine", version = "0.1.0" }
+anyhow = "1.0"

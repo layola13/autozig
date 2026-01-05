@@ -1,0 +1,10 @@
+[package]
+name = "autozig-example-smart-lowering"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+autozig = { path = "../.." }
+
+[build-dependencies]
+autozig-build = { path = "../../gen/build" }
