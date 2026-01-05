@@ -1,0 +1,12 @@
+[package]
+name = "autozig-example-stream-basic"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+autozig = { path = "../..", features = ["stream"] }
+tokio = { version = "1.0", features = ["full"] }
+futures = "0.3"
+
+[build-dependencies]
+autozig-build = { path = "../../gen/build" }

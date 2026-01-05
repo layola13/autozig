@@ -46,6 +46,10 @@
 pub use autozig_macro::autozig;
 pub use autozig_macro::include_zig;
 
+/// Stream support for async Zig FFI
+#[cfg(feature = "stream")]
+pub mod stream;
+
 /// Common imports for using AutoZig
 pub mod prelude {
     pub use crate::{

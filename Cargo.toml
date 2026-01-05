@@ -19,6 +19,12 @@ resolver = "2"
 
 [dependencies]
 autozig-macro = { path = "macro", version = "0.1.0" }
+tokio = { version = "1.0", features = ["sync"], optional = true }
+futures = { version = "0.3", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }
+futures = "0.3"
 
 [workspace]
 members = [
@@ -37,9 +43,13 @@ members = [
     "examples/security_tests",
     "examples/generics",
     "examples/async",
-    "examples/zig-c"
+    "examples/zig-c",
+    "examples/stream_basic"
 ]
 
 [features]
 # Enable build-time code generation
 build = []
+# Enable stream support for async FFI
+stream = ["tokio", "futures"]
+default = []
