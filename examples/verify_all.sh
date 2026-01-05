@@ -125,6 +125,7 @@ main() {
         "Generics (Phase 3):generics"
         "Async FFI (Phase 3):async"
         "Zig-C Interop:zig-c"
+        "Stream Support (Phase 4.1):stream_basic"
     )
     
     # 遍历所有示例
