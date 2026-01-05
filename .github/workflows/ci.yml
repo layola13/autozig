@@ -68,6 +68,9 @@ jobs:
         with:
           components: rustfmt
       
+      - name: Auto-format code
+        run: cargo fmt --all
+      
       - name: Check formatting
         run: cargo fmt --all -- --check
 

@@ -11,7 +11,7 @@
 [![Rust](https://img.shields.io/badge/rust-1.77%2B-orange.svg)](https://www.rust-lang.org/)
 [![Zig](https://img.shields.io/badge/zig-0.11%2B-f7a41d.svg)](https://ziglang.org/)
 [![CI](https://img.shields.io/badge/CI-passing-brightgreen.svg)](.github/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-35%20passing-success.svg)](.)
+[![Tests](https://img.shields.io/badge/tests-39%20passing-success.svg)](.)
 
 **AutoZig** enables **safe**, **ergonomic** interop between Rust and Zig code, inspired by [autocxx](https://github.com/google/autocxx) for C++.
 
@@ -252,6 +252,56 @@ cargo test  # 自动运行 Rust 和 Zig 测试
 
 ---
 
+### 🔗 C Library Integration
+
+> 🌐 Seamless integration with existing C libraries through Zig wrappers
+
+AutoZig 支持通过 Zig 包装层调用 C 函数，实现 **Rust → Zig → C** 三方互操作：
+
+```rust
+// build.rs - Add C source files
+use autozig_gen_build::Builder;
+
+fn main() {
+    Builder::new()
+        .with_c_sources(&["src/math.c", "src/utils.c"])
+        .build()
+        .expect("Failed to build");
+}
+```
+
+```zig
+// wrapper.zig - Zig wraps C functions
+extern "c" fn c_add(a: i32, b: i32) i32;
+
+export fn add(a: i32, b: i32) i32 {
+    return c_add(a, b);
+}
+```
+
+```rust
+// main.rs - Rust calls through autozig
+use autozig::zig;
+
+zig! {
+    fn add(a: i32, b: i32) -> i32;
+}
+
+fn main() {
+    println!("{}", add(10, 20)); // Calls C through Zig
+}
+```
+
+**Benefits:**
+- ✅ Leverage existing C libraries without rewriting
+- ✅ Add Zig enhancements on top of C functions
+- ✅ Type-safe FFI across all three languages
+- ✅ Single build system manages everything
+
+> 📖 **Complete Example**: [examples/zig-c](examples/zig-c)
+
+---
+
 ### 📦 External File Support
 
 > 📁 Import external `.zig` files into your Rust project
@@ -336,7 +386,7 @@ autozig! {
 
 ## 📦 Examples & Verification
 
-### 📚 10 Working Examples
+### 📚 11 Working Examples
 
 All examples are fully tested and ready to run:
 
@@ -350,6 +400,53 @@ All examples are fully tested and ready to run:
 8. **security_tests** - Memory safety tests
 9. **generics** - Generic monomorphization (Phase 3)
 10. **async** - Async FFI with spawn_blocking (Phase 3)
+11. **zig-c** - **C + Zig + Rust** three-way interop (Rust → Zig → C)
+
+### 🌐 Multi-Language Interop: C + Zig + Rust
+
+> 🎉 **NEW!** AutoZig now supports full **C + Zig + Rust** three-way interoperability!
+
+The **zig-c** example demonstrates a complete calling chain: **Rust → Zig → C**
+
+```rust
+use autozig::zig;
+
+zig! {
+    // Zig wraps C functions and adds enhancements
+    fn add(a: i32, b: i32) -> i32;          // C: c_add()
+    fn power(base: i32, exp: u32) -> i32;   // Zig: uses c_multiply()
+    fn sum_array(arr: &[i32]) -> i32;       // C: c_sum_array()
+    fn average(arr: &[i32]) -> f64;         // Hybrid: C sum + Zig float math
+}
+
+fn main() {
+    // All tests passing: 4/4 unit tests ✅
+    println!("{}", add(10, 20));           // 30
+    println!("{}", power(2, 10));          // 1024
+    println!("{}", sum_array(&[1,2,3,4,5])); // 15
+    println!("{}", average(&[1,2,3,4,5]));   // 3.0
+}
+```
+
+**Key Features:**
+- ✅ **C Integration**: Use existing C libraries through Zig wrappers
+- ✅ **Smart Lowering**: `&[i32]` and `&str` automatically converted to `ptr + len`
+- ✅ **Type Safety**: Full type checking across all three languages
+- ✅ **Zero Overhead**: Direct FFI calls with no runtime cost
+- ✅ **Build System**: Single `build.rs` with `with_c_sources()` API
+
+**Architecture:**
+```
+Rust (safe API)
+  ↓ FFI call
+Zig (wrapper + enhancements)
+  ↓ extern "c"
+C (low-level implementation)
+```
+
+> 📖 **Learn More**: [examples/zig-c/README.md](examples/zig-c/README.md)
+
+---
 
 ### 🔍 Batch Verification
 
@@ -366,8 +463,8 @@ Output:
   验证结果总结
 ======================================
 
-总计: 10 个示例
-成功: 10
+总计: 11 个示例
+成功: 11
 失败: 0
 跳过: 0
 [✓] 所有示例验证通过！🎉
