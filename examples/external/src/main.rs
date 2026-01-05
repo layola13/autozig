@@ -17,52 +17,52 @@ include_zig!("zig/strings.zig", {
 
 fn main() {
     println!("=== AutoZig External Files 示例 ===\n");
-    
+
     // === 数学函数测试 ===
     println!("【数学函数库 (zig/math.zig)】");
-    
+
     println!("\n1. 阶乘计算:");
     for n in [5, 10, 15] {
         let result = factorial(n);
         println!("   {}! = {}", n, result);
     }
-    
+
     println!("\n2. 斐波那契数列:");
     for n in [10, 15, 20] {
         let result = fibonacci(n);
         println!("   fib({}) = {}", n, result);
     }
-    
+
     println!("\n3. 最大公约数:");
     let pairs = [(48, 18), (100, 35), (77, 49)];
     for (a, b) in pairs {
         let result = gcd(a, b);
         println!("   gcd({}, {}) = {}", a, b, result);
     }
-    
+
     println!("\n4. 素数判断:");
     let numbers = [17, 20, 29, 30, 97, 100];
     for n in numbers {
         let result = is_prime(n);
         println!("   {} is prime: {}", n, result);
     }
-    
+
     // === 字符串函数测试 ===
     println!("\n【字符串工具库 (zig/strings.zig)】");
-    
+
     println!("\n5. 字符串长度:");
     let text = "Hello, AutoZig!";
     let len = string_length(text);
     println!("   文本: \"{}\"", text);
     println!("   长度: {}", len);
-    
+
     println!("\n6. 字符计数:");
     let text = "programming";
     let ch = b'g';
     let count = string_count_char(text, ch);
     println!("   文本: \"{}\"", text);
     println!("   字符 '{}' 出现次数: {}", ch as char, count);
-    
+
     println!("\n7. 转小写:");
     let text = "RUST AND ZIG";
     let mut output = vec![0u8; text.len()];
@@ -70,7 +70,7 @@ fn main() {
     let result = String::from_utf8(output).unwrap();
     println!("   输入: \"{}\"", text);
     println!("   输出: \"{}\"", result);
-    
+
     println!("\n=== 所有测试通过 ===");
     println!("\n✨ 关键特性:");
     println!("  ✓ 支持引用外部 .zig 文件");

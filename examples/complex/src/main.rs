@@ -109,10 +109,10 @@ pub const DataPoint = extern struct {
 // 10. 处理 DataPoint 数组，找到最大值的 ID
 pub export fn find_max_datapoint(points: [*]const DataPoint, len: usize) u32 {
     if (len == 0) return 0;
-    
+
     var max_id = points[0].id;
     var max_val = points[0].value;
-    
+
     var i: usize = 1;
     while (i < len) : (i += 1) {
         if (points[i].value > max_val) {
@@ -120,7 +120,7 @@ pub export fn find_max_datapoint(points: [*]const DataPoint, len: usize) u32 {
             max_id = points[i].id;
         }
     }
-    
+
     return max_id;
 }
 ---
@@ -171,16 +171,16 @@ fn main() {
 
     // ========== 1. 字符串处理（零 unsafe）==========
     println!("【字符串处理】");
-    
+
     let text = "hello rust";
     let len = string_length(text);
     println!("1. 字符串 '{}' 长度: {}", text, len);
-    
+
     let mut text2_bytes = b"world".to_vec();
     string_reverse(&mut text2_bytes);
     let text2 = String::from_utf8(text2_bytes).unwrap();
     println!("2. 反转后: '{}'", text2);
-    
+
     let mut upper = vec![0u8; text.len()];
     string_to_upper(text, &mut upper);
     let upper_str = String::from_utf8_lossy(&upper);
@@ -188,15 +188,15 @@ fn main() {
 
     // ========== 2. 数组/Vec 处理（零 unsafe）==========
     println!("【数组/Vec 处理】");
-    
+
     let numbers = vec![1, 2, 3, 4, 5];
     let sum = array_sum(&numbers);
     println!("4. 数组 {:?} 的和: {}", numbers, sum);
-    
+
     let mut numbers2 = vec![10, 20, 30];
     array_scale(&mut numbers2, 3);
     println!("5. 数组乘以3: {:?}", numbers2);
-    
+
     let mixed = vec![-5, 3, -2, 8, 0, -1, 10];
     let mut positive = vec![0i32; mixed.len()];
     let count = array_filter_positive(&mixed, &mut positive);
@@ -205,39 +205,44 @@ fn main() {
 
     // ========== 3. 元组 (通过 struct 表示) ==========
     println!("【元组表示（Pair, Triple）】");
-    
+
     let pair = make_pair(42, 100);
     println!("7. 创建 Pair: ({}, {})", pair.first, pair.second);
-    
+
     let swapped = swap_pair(pair);
     println!("8. 交换后: ({}, {})", swapped.first, swapped.second);
-    
+
     let triple = Triple { a: 10.0, b: 20.0, c: 30.0 };
     let avg = triple_average(triple);
     println!("9. Triple ({}, {}, {}) 平均值: {:.2}\n", triple.a, triple.b, triple.c, avg);
 
     // ========== 4. 复杂数据结构（零 unsafe）==========
     println!("【复杂数据结构（DataPoint）】");
-    
+
     let mut dp1 = DataPoint { id: 1, value: 3.5, label: [0; 16] };
     let label1 = b"sensor-A";
     dp1.label[..label1.len()].copy_from_slice(label1);
-    
+
     let mut dp2 = DataPoint { id: 2, value: 7.2, label: [0; 16] };
     let label2 = b"sensor-B";
     dp2.label[..label2.len()].copy_from_slice(label2);
-    
+
     let mut dp3 = DataPoint { id: 3, value: 5.8, label: [0; 16] };
     let label3 = b"sensor-C";
     dp3.label[..label3.len()].copy_from_slice(label3);
-    
+
     let datapoints = vec![dp1, dp2, dp3];
-    
+
     for dp in &datapoints {
         let label = String::from_utf8_lossy(&dp.label[..8]);
-        println!("   DataPoint {{ id: {}, value: {:.1}, label: '{}' }}", dp.id, dp.value, label.trim_end_matches('\0'));
+        println!(
+            "   DataPoint {{ id: {}, value: {:.1}, label: '{}' }}",
+            dp.id,
+            dp.value,
+            label.trim_end_matches('\0')
+        );
     }
-    
+
     let max_id = find_max_datapoint(&datapoints);
     println!("10. 最大值的 ID: {}\n", max_id);
 

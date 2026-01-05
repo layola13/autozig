@@ -4,9 +4,16 @@
 //! It shows how Zig code can implement Rust's std::hash::Hasher trait
 //! with automatic lifecycle management through opaque pointers.
 
+use std::{
+    collections::HashMap,
+    hash::{
+        BuildHasherDefault,
+        Hash,
+        Hasher,
+    },
+};
+
 use autozig::autozig;
-use std::collections::HashMap;
-use std::hash::{Hash, BuildHasherDefault, Hasher};
 
 // AutoZig macro: Zig implementation + Rust trait mapping with opaque pointer
 autozig! {
@@ -61,7 +68,7 @@ autozig! {
         fn write(&mut self, bytes: &[u8]) {
             hasher_write(bytes)
         }
-        
+
         fn finish(&self) -> u64 {
             hasher_finish()
         }
@@ -99,13 +106,13 @@ fn main() {
     // Demo 3: Using with HashMap
     println!("Demo 3: HashMap Integration");
     println!("----------------------------");
-    
+
     type ZigHashMap<K, V> = HashMap<K, V, BuildHasherDefault<ZigHasher>>;
     let mut map: ZigHashMap<String, String> = HashMap::default();
-    
+
     map.insert("key1".to_string(), "value1".to_string());
     map.insert("key2".to_string(), "value2".to_string());
-    
+
     println!("map['key1'] = {:?}", map.get("key1"));
     println!("map['key2'] = {:?}", map.get("key2"));
     println!("map size: {}", map.len());
@@ -171,7 +178,7 @@ mod tests {
     fn test_hashmap_integration() {
         type ZigHashMap<K, V> = HashMap<K, V, BuildHasherDefault<ZigHasher>>;
         let mut map: ZigHashMap<String, i32> = HashMap::default();
-        
+
         map.insert("one".to_string(), 1);
         map.insert("two".to_string(), 2);
 

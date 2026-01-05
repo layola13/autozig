@@ -55,7 +55,7 @@ pub export fn find_max(arr: [*]const i32, len: usize) OptionInt {
             .value = 0,
         };
     }
-    
+
     var max_val = arr[0];
     var i: usize = 1;
     while (i < len) : (i += 1) {
@@ -63,7 +63,7 @@ pub export fn find_max(arr: [*]const i32, len: usize) OptionInt {
             max_val = arr[i];
         }
     }
-    
+
     return OptionInt{
         .tag = OptionTag.Some,
         .value = max_val,
@@ -139,13 +139,13 @@ fn main() {
 
     // 测试 Result<i32, i32>
     println!("1. 测试 Result 类型（除法操作）:");
-    
+
     let result1 = divide(10, 2);
     match result1.tag {
         ResultTag::Ok => println!("   10 / 2 = {} (成功)", result1.value),
         ResultTag::Err => println!("   错误码: {}", result1.value),
     }
-    
+
     let result2 = divide(10, 0);
     match result2.tag {
         ResultTag::Ok => println!("   10 / 0 = {} (成功)", result2.value),
@@ -154,14 +154,14 @@ fn main() {
 
     // 测试 Option<i32>
     println!("\n2. 测试 Option 类型（查找最大值）:");
-    
+
     let arr = vec![3, 7, 2, 9, 4];
     let option1 = find_max(arr.as_ptr(), arr.len());
     match option1.tag {
         OptionTag::Some => println!("   数组 {:?} 的最大值: {}", arr, option1.value),
         OptionTag::None => println!("   数组为空，无最大值"),
     }
-    
+
     let empty: Vec<i32> = vec![];
     let option2 = find_max(empty.as_ptr(), empty.len());
     match option2.tag {
@@ -171,16 +171,16 @@ fn main() {
 
     // 测试自定义枚举 Status
     println!("\n3. 测试自定义枚举（Status 状态机）:");
-    
+
     let status = Status::Idle;
     println!("   初始状态: {:?} (code: {})", status, status_to_code(status));
-    
+
     let next = next_status(status);
     println!("   转换后: {:?} (code: {})", next, status_to_code(next));
-    
+
     let next2 = next_status(next);
     println!("   再转换: {:?} (code: {})", next2, status_to_code(next2));
-    
+
     let next3 = next_status(next2);
     println!("   再转换: {:?} (code: {})", next3, status_to_code(next3));
 

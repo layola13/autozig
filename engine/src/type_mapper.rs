@@ -10,7 +10,7 @@ pub struct TypeMapper {
 impl TypeMapper {
     pub fn new() -> Self {
         let mut mappings = HashMap::new();
-        
+
         // Integer types
         mappings.insert("i8", "i8");
         mappings.insert("i16", "i16");
@@ -18,36 +18,36 @@ impl TypeMapper {
         mappings.insert("i64", "i64");
         mappings.insert("i128", "i128");
         mappings.insert("isize", "isize");
-        
+
         mappings.insert("u8", "u8");
         mappings.insert("u16", "u16");
         mappings.insert("u32", "u32");
         mappings.insert("u64", "u64");
         mappings.insert("u128", "u128");
         mappings.insert("usize", "usize");
-        
+
         // Floating point
         mappings.insert("f32", "f32");
         mappings.insert("f64", "f64");
-        
+
         // Boolean (Zig bool is u8 in C ABI)
         mappings.insert("bool", "u8");
-        
+
         // Void
         mappings.insert("void", "()");
-        
+
         // Pointer types
         mappings.insert("[*]const u8", "*const u8");
         mappings.insert("[*]u8", "*mut u8");
-        
+
         Self { mappings }
     }
-    
+
     /// Map a Zig type to its Rust equivalent
     pub fn map_type(&self, zig_type: &str) -> Option<&str> {
         self.mappings.get(zig_type).copied()
     }
-    
+
     /// Check if a type is a pointer that needs special handling
     pub fn is_slice_type(&self, zig_type: &str) -> bool {
         zig_type.starts_with("[*]")
@@ -85,10 +85,10 @@ pub fn analyze_param_type(ty: &syn::Type) -> ParamConversion {
                         }
                     }
                     ParamConversion::Direct
-                }
+                },
                 _ => ParamConversion::Direct,
             }
-        }
+        },
         _ => ParamConversion::Direct,
     }
 }
@@ -96,22 +96,22 @@ pub fn analyze_param_type(ty: &syn::Type) -> ParamConversion {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_type_mapper() {
         let mapper = TypeMapper::new();
-        
+
         assert_eq!(mapper.map_type("i32"), Some("i32"));
         assert_eq!(mapper.map_type("u64"), Some("u64"));
         assert_eq!(mapper.map_type("f32"), Some("f32"));
         assert_eq!(mapper.map_type("bool"), Some("u8"));
         assert_eq!(mapper.map_type("void"), Some("()"));
     }
-    
+
     #[test]
     fn test_slice_detection() {
         let mapper = TypeMapper::new();
-        
+
         assert!(mapper.is_slice_type("[*]const u8"));
         assert!(mapper.is_slice_type("[*]u8"));
         assert!(!mapper.is_slice_type("i32"));

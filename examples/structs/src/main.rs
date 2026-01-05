@@ -102,10 +102,10 @@ fn main() {
     println!("1. 测试 Point 结构体:");
     let p1 = point_new(3, 4);
     println!("   创建点: Point {{ x: {}, y: {} }}", p1.x, p1.y);
-    
+
     let dist = point_distance(p1);
     println!("   到原点距离: {:.2}", dist);
-    
+
     let mut p2 = point_new(10, 20);
     println!("   移动前: Point {{ x: {}, y: {} }}", p2.x, p2.y);
     point_move(&mut p2, 5, -3);
@@ -128,7 +128,7 @@ fn main() {
     println!("     width: {},", rect.width);
     println!("     height: {}", rect.height);
     println!("   }}");
-    
+
     let area = rect_area(rect);
     println!("   矩形面积: {}", area);
 
