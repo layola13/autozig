@@ -41,6 +41,27 @@ log_section() {
     echo -e "${BLUE}======================================${NC}\n"
 }
 
+# 检查 main.rs 是否包含 AutoZig 宏
+check_autozig_macro() {
+    local example_dir=$1
+    local main_rs="$example_dir/src/main.rs"
+    
+    if [ ! -f "$main_rs" ]; then
+        log_error "找不到 main.rs 文件: $main_rs"
+        return 1
+    fi
+    
+    # 检查是否包含 autozig! 或 include_zig! 宏
+    if grep -qE '(autozig!|include_zig!)' "$main_rs"; then
+        log_success "检测到 AutoZig 宏 (autozig! 或 include_zig!)"
+        return 0
+    else
+        log_error "main.rs 缺少必需的 AutoZig 宏 (autozig! 或 include_zig!)"
+        log_error "每个示例的 main.rs 必须至少使用一个 AutoZig 宏"
+        return 1
+    fi
+}
+
 # 检查示例项目
 verify_example() {
     local example_name=$1
@@ -58,6 +79,15 @@ verify_example() {
     fi
     
     cd "$example_dir"
+    
+    # 步骤0: 检查 AutoZig 宏
+    log_info "检查 AutoZig 宏使用..."
+    if ! check_autozig_macro "$example_dir"; then
+        log_error "$example_name: 宏检查失败"
+        FAILED=$((FAILED + 1))
+        cd - > /dev/null
+        return 1
+    fi
     
     # 步骤1: 清理
     log_info "清理构建产物..."
@@ -126,6 +156,8 @@ main() {
         "Async FFI (Phase 3):async"
         "Zig-C Interop:zig-c"
         "Stream Support (Phase 4.1):stream_basic"
+        "SIMD Detection (Phase 4.2):simd_detect"
+        "Zero-Copy Buffer (Phase 4.2):zero_copy"
     )
     
     # 遍历所有示例

@@ -44,7 +44,9 @@ members = [
     "examples/generics",
     "examples/async",
     "examples/zig-c",
-    "examples/stream_basic"
+    "examples/stream_basic",
+    "examples/simd_detect",
+    "examples/zero_copy"
 ]
 
 [features]

@@ -40,7 +40,9 @@
 //! println!("Hash: {}", hash);
 //! ```
 
-#![forbid(unsafe_code)]
+// Note: We cannot use #![forbid(unsafe_code)] because the zero_copy module
+// requires unsafe for FFI and raw pointer manipulation.
+#![warn(unsafe_code)]
 
 /// Re-export the procedural macros
 pub use autozig_macro::autozig;
@@ -49,6 +51,9 @@ pub use autozig_macro::include_zig;
 /// Stream support for async Zig FFI
 #[cfg(feature = "stream")]
 pub mod stream;
+
+/// Zero-copy buffer passing between Zig and Rust (Phase 4.2)
+pub mod zero_copy;
 
 /// Common imports for using AutoZig
 pub mod prelude {

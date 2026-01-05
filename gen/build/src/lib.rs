@@ -15,6 +15,13 @@ use autozig_engine::{
     BuildOutput,
 };
 
+pub mod simd;
+
+pub use simd::{
+    detect_and_report,
+    SimdConfig,
+};
+
 /// Builder for autozig in build.rs
 pub struct Builder {
     src_dir: PathBuf,
