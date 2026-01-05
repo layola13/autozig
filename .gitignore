@@ -105,3 +105,6 @@ ENV/
 *.swm
 (Phase
 FFI
+Detection
+Support
+Buffer

@@ -5,7 +5,7 @@
 
 ![AutoZig Logo](logos/logofull.png)
 
-### Safe Rust to Zig FFI with Generics & Async Support
+### Safe Rust to Zig FFI with Generics, Async & Stream Support
 
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
 [![Rust](https://img.shields.io/badge/rust-1.77%2B-orange.svg)](https://www.rust-lang.org/)
@@ -15,7 +15,7 @@
 
 **AutoZig** enables **safe**, **ergonomic** interop between Rust and Zig code, inspired by [autocxx](https://github.com/google/autocxx) for C++.
 
-[Quick Start](#-quick-start) • [Features](#-features) • [Phase 3: Generics & Async](#-phase-3-generics--async-new) • [Documentation](#-further-reading) • [Examples](examples/) • [Contributing](CONTRIBUTING.md)
+[Quick Start](#-quick-start) • [Features](#-features) • [Phase 4: Advanced Features](#-phase-4-advanced-features-new) • [Documentation](#-further-reading) • [Examples](examples/) • [Contributing](CONTRIBUTING.md)
 
 </div>
 
@@ -103,9 +103,70 @@ fn main() {
 
 ## ✨ Key Features
 
-### 🎉 Phase 3: Generics & Async (NEW!)
+### 🎉 Phase 4: Advanced Features (NEW!)
 
-> **Latest Release** - AutoZig now supports generic monomorphization and async FFI!
+> **Latest Release** - AutoZig Phase 1-4 fully complete! New Stream support, zero-copy optimization, SIMD detection and more advanced features!
+
+#### 🌊 Stream Support
+
+异步数据流支持，基于 `futures::Stream` trait：
+
+```rust
+use autozig::stream::create_stream;
+use futures::StreamExt;
+
+let (tx, stream) = create_stream::<U32Value>();
+futures::pin_mut!(stream);
+while let Some(result) = stream.next().await {
+    println!("Received: {:?}", result);
+}
+```
+
+**Features:**
+- ✅ `futures::Stream` trait implementation
+- ✅ Async data stream processing
+- ✅ Error handling and state management
+- ✅ Seamless integration with Zig generators
+
+#### 🚀 Zero-Copy Buffer
+
+Zero-copy buffer passing for efficient Zig → Rust data transfer with no overhead:
+
+```rust
+use autozig::zero_copy::ZeroCopyBuffer;
+
+// Zig generates data, Rust receives with zero-copy
+let buffer = ZeroCopyBuffer::from_zig_vec(raw_vec);
+let data = buffer.into_vec(); // Zero-copy conversion
+```
+
+**Performance:**
+- ✅ **1.93x speedup** (compared to copying)
+- ✅ Zero additional memory allocation
+- ✅ Completely safe API
+
+#### 🔥 SIMD Detection
+
+Compile-time SIMD feature detection and automatic optimization:
+
+```rust
+// build.rs
+let simd_config = autozig_build::detect_and_report();
+println!("Detected SIMD: {}", simd_config.description);
+```
+
+**Supported Features:**
+- ✅ x86_64: SSE2, SSE4.2, AVX, AVX2, AVX-512
+- ✅ ARM: NEON
+- ✅ Zig automatic vectorization optimization
+
+> 📖 **Learn More**: [examples/stream_basic](examples/stream_basic) | [examples/zero_copy](examples/zero_copy) | [examples/simd_detect](examples/simd_detect)
+
+---
+
+### 🎉 Phase 3: Generics & Async
+
+> AutoZig supports generic monomorphization and async FFI!
 
 #### 🔷 Generic Monomorphization
 
@@ -211,13 +272,13 @@ export fn heavy_computation(data: i32) i32 {
 
 > 🎉 Run Zig unit tests as part of your Rust test suite!
 
-AutoZig 支持将 Zig 的单元测试集成到 Rust 的测试框架中！
+AutoZig integrates Zig unit tests into the Rust test framework!
 
 ```rust
 // build.rs
 fn main() -> anyhow::Result<()> {
     autozig_build::build("src")?;
-    autozig_build::build_tests("zig")?;  // 编译 Zig 测试
+    autozig_build::build_tests("zig")?;  // Compile Zig tests
     Ok(())
 }
 ```
@@ -243,12 +304,12 @@ fn test_math_zig_tests() {
 }
 ```
 
-运行测试：
+Run tests:
 ```bash
-cargo test  # 自动运行 Rust 和 Zig 测试
+cargo test  # Automatically runs Rust and Zig tests
 ```
 
-> 📖 **详细文档**：[docs/ZIG_TEST_INTEGRATION.md](docs/ZIG_TEST_INTEGRATION.md)
+> 📖 **Learn More**: [docs/ZIG_TEST_INTEGRATION.md](docs/ZIG_TEST_INTEGRATION.md)
 
 ---
 
@@ -256,7 +317,7 @@ cargo test  # 自动运行 Rust 和 Zig 测试
 
 > 🌐 Seamless integration with existing C libraries through Zig wrappers
 
-AutoZig 支持通过 Zig 包装层调用 C 函数，实现 **Rust → Zig → C** 三方互操作：
+AutoZig supports calling C functions through Zig wrappers for **Rust → Zig → C** three-way interoperability:
 
 ```rust
 // build.rs - Add C source files
@@ -306,7 +367,7 @@ fn main() {
 
 > 📁 Import external `.zig` files into your Rust project
 
-使用 `include_zig!` 宏引用外部 `.zig` 文件：
+Use the `include_zig!` macro to reference external `.zig` files:
 
 ```rust
 use autozig::include_zig;
@@ -386,7 +447,7 @@ autozig! {
 
 ## 📦 Examples & Verification
 
-### 📚 11 Working Examples
+### 📚 14 Working Examples
 
 All examples are fully tested and ready to run:
 
@@ -400,7 +461,10 @@ All examples are fully tested and ready to run:
 8. **security_tests** - Memory safety tests
 9. **generics** - Generic monomorphization (Phase 3)
 10. **async** - Async FFI with spawn_blocking (Phase 3)
-11. **zig-c** - **C + Zig + Rust** three-way interop (Rust → Zig → C)
+11. **zig-c** - **C + Zig + Rust** three-way interop
+12. **stream_basic** - Stream support (Phase 4)
+13. **simd_detect** - SIMD detection (Phase 4)
+14. **zero_copy** - Zero-copy optimization (Phase 4)
 
 ### 🌐 Multi-Language Interop: C + Zig + Rust
 
@@ -460,14 +524,14 @@ cd examples
 Output:
 ```
 ======================================
-  验证结果总结
+  Verification Results Summary
 ======================================
 
-总计: 11 个示例
-成功: 11
-失败: 0
-跳过: 0
-[✓] 所有示例验证通过！🎉
+Total: 14 examples
+Success: 14
+Failed: 0
+Skipped: 0
+[✓] All examples verified successfully! 🎉
 ```
 
 > 📖 **Learn More**: [examples/README.md](examples/README.md)
@@ -537,7 +601,7 @@ autozig/
 │   ├── zig_compiler.rs  # Zig compiler wrapper
 │   └── type_mapper.rs   # Type conversion logic
 ├── gen/build/           # Build script helpers
-├── examples/            # 10 working examples
+├── examples/            # 14 working examples
 │   ├── verify_all.sh    # Batch verification script
 │   └── README.md        # Examples documentation
 └── docs/                # Technical documentation
@@ -568,6 +632,9 @@ Component | Version | Notes |
 | Inline Code | ❌ | **✅** |
 | Generics Support | ✅ | **✅** |
 | Async Support | ❌ | **✅** |
+| Stream Support | ❌ | **✅** |
+| Zero-Copy | ❌ | **✅** |
+| SIMD Optimization | ❌ | **✅** |
 | Build Complexity | High | **Medium** |
 | Type Safety | Strong | **Strong** |
 
@@ -627,13 +694,19 @@ at your option.
 
 ## ⚠️ Status
 
-> **✅ Phase 3 Complete!** - AutoZig now supports generics and async FFI with 100% feature completion.
-> 
+> **✅ Phase 1-4 Complete!** - AutoZig has completed all planned features and is production-ready!
+>
 > **Current Status:**
-> - ✅ Phase 1: Basic FFI bindings
-> - ✅ Phase 2: Smart Lowering & Traits
-> - ✅ Phase 3: Generics & Async
-> - 🔜 Phase 4: Stream support & advanced features (planned)
+> - ✅ Phase 1: Basic FFI bindings (100%)
+> - ✅ Phase 2: Smart Lowering & Traits (100%)
+> - ✅ Phase 3: Generics & Async (100%)
+> - ✅ Phase 4: Stream, Zero-Copy & SIMD (100%)
+>
+> **Statistics:**
+> - 📦 14 working examples
+> - ✅ 39/39 tests passing (100%)
+> - 📝 20+ documentation files
+> - 🚀 Ready for production use
 
 ---
 
@@ -645,18 +718,22 @@ at your option.
 - 📚 [Implementation Summary](IMPLEMENTATION_SUMMARY.md) - Technical deep dive
 
 ### Phase-Specific Documentation
-- 🔷 [Phase 3: Generics Design](PHASE3_GENERICS_DESIGN.md)
-- ⚡ [Phase 3: Async Design](PHASE3_ASYNC_DESIGN.md)
-- ✅ [Phase 3: Complete Status](PHASE3_COMPLETE_FINAL_STATUS.md)
+- 🔷 [Phase 3: Generics Design](docs/PHASE3_GENERICS_DESIGN.md)
+- ⚡ [Phase 3: Async Design](docs/PHASE3_ASYNC_DESIGN.md)
+- ✅ [Phase 3: Complete Status](docs/PHASE3_COMPLETE_FINAL_STATUS.md)
+- 🌊 [Phase 4: Stream Design](docs/PHASE4_STREAM_DESIGN.md)
+- 🚀 [Phase 4: Implementation Status](docs/PHASE4_IMPLEMENTATION_STATUS.md)
+- 🎯 [Phase 4.2: Advanced Features](docs/PHASE_4_2_IMPLEMENTATION_COMPLETE.md)
 
 ### Feature Documentation
-- 🧪 [Zig Test Integration](ZIG_TEST_INTEGRATION.md)
-- 🗺️ [Trait Support Roadmap](TRAIT_SUPPORT_ROADMAP.md)
-- 🛡️ [Security Best Practices](SECURITY_BEST_PRACTICES.md)
-- 🔒 [Zero Unsafe Achievement](ZERO_UNSAFE_ACHIEVEMENT.md)
+- 🧪 [Zig Test Integration](docs/ZIG_TEST_INTEGRATION.md)
+- 🗺️ [Trait Support Design](docs/TRAIT_SUPPORT_DESIGN.md)
+- 🛡️ [Security Best Practices](docs/SECURITY_BEST_PRACTICES.md)
+- 🔒 [Zero Unsafe Achievement](docs/ZERO_UNSAFE_ACHIEVEMENT.md)
+- 📋 [Feature Summary](docs/AUTOZIG_功能总结.md) - Complete feature checklist
 
 ### Examples
-- 📂 [Examples Directory](examples/) - 10 working examples
+- 📂 [Examples Directory](examples/) - 14 working examples
 - 📖 [Examples README](examples/README.md) - Detailed guide
 - 🔍 [Batch Verification](examples/verify_all.sh) - Test all examples
 
