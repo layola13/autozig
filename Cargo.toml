@@ -32,7 +32,9 @@ members = [
     "examples/external",
     "examples/trait_calculator",
     "examples/trait_hasher",
-    "examples/security_tests"
+    "examples/security_tests",
+    "examples/generics",
+    "examples/async"
 ]
 
 [features]

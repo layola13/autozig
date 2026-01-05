@@ -1,0 +1,19 @@
+# Clippy Configuration for AutoZig
+
+# Allow some pedantic lints that are too strict for our use case
+disallowed-names = []
+
+# Cognitive complexity threshold
+cognitive-complexity-threshold = 30
+
+# Type complexity threshold
+type-complexity-threshold = 500
+
+# Too many arguments threshold (we have some complex FFI functions)
+too-many-arguments-threshold = 8
+
+# Too many lines threshold
+too-many-lines-threshold = 200
+
+# Documentation
+missing-docs-in-private-items = false

@@ -27,10 +27,25 @@ pub struct AutoZigConfig {
     pub rust_trait_impls: Vec<RustTraitImpl>,
 }
 
+/// Generic parameter definition (Phase 3)
+#[derive(Debug, Clone)]
+pub struct GenericParam {
+    /// Parameter name (e.g., "T")
+    pub name: String,
+    /// Type bounds (e.g., Copy, Clone)
+    pub bounds: Vec<String>,
+}
+
 /// A Rust function signature that will have a safe wrapper generated
 #[derive(Clone)]
 pub struct RustFunctionSignature {
     pub sig: Signature,
+    /// Generic parameters (Phase 3: Generics support)
+    pub generic_params: Vec<GenericParam>,
+    /// Whether this is an async function (Phase 3: Async support)
+    pub is_async: bool,
+    /// Monomorphization attribute types (e.g., #[monomorphize(i32, f64)])
+    pub monomorphize_types: Vec<String>,
 }
 
 /// A Rust struct definition for FFI types
@@ -273,7 +288,7 @@ fn parse_rust_definitions(input: &str) -> ParseResult<(Vec<RustEnumDefinition>, 
                                 }
                             }
                             syn::Item::Fn(item_fn) => {
-                                signatures.push(RustFunctionSignature { sig: item_fn.sig });
+                                signatures.push(parse_function_signature(item_fn.sig, &item_fn.attrs));
                             }
                             syn::Item::Impl(_) => {
                                 // Already processed in first pass
@@ -281,7 +296,7 @@ fn parse_rust_definitions(input: &str) -> ParseResult<(Vec<RustEnumDefinition>, 
                             syn::Item::ForeignMod(foreign_mod) => {
                                 for foreign_item in foreign_mod.items {
                                     if let syn::ForeignItem::Fn(fn_item) = foreign_item {
-                                        signatures.push(RustFunctionSignature { sig: fn_item.sig });
+                                        signatures.push(parse_function_signature(fn_item.sig, &fn_item.attrs));
                                     }
                                 }
                             }
@@ -289,11 +304,11 @@ fn parse_rust_definitions(input: &str) -> ParseResult<(Vec<RustEnumDefinition>, 
                                 // Verbatim items are unparsed token streams
                                 // Try to parse as a function signature
                                 let tokens_str = tokens.to_string();
-                                if tokens_str.trim().starts_with("fn ") {
+                                if tokens_str.trim().starts_with("fn ") || tokens_str.trim().starts_with("async fn ") || tokens_str.contains("fn ") {
                                     // Try adding a body and parsing as ItemFn
                                     let fn_with_body = format!("{} {{ unimplemented!() }}", tokens_str.trim_end_matches(';').trim());
                                     if let Ok(item_fn) = syn::parse_str::<syn::ItemFn>(&fn_with_body) {
-                                        signatures.push(RustFunctionSignature { sig: item_fn.sig });
+                                        signatures.push(parse_function_signature(item_fn.sig, &item_fn.attrs));
                                     }
                                 }
                             }
@@ -308,6 +323,60 @@ fn parse_rust_definitions(input: &str) -> ParseResult<(Vec<RustEnumDefinition>, 
     }
     
     Ok((enums, structs, signatures, trait_impls))
+}
+
+/// Parse a function signature with generics and async support (Phase 3)
+fn parse_function_signature(sig: Signature, attrs: &[syn::Attribute]) -> RustFunctionSignature {
+    // Extract generic parameters
+    let generic_params = sig.generics.params.iter().filter_map(|param| {
+        if let syn::GenericParam::Type(type_param) = param {
+            Some(GenericParam {
+                name: type_param.ident.to_string(),
+                bounds: type_param.bounds.iter().filter_map(|bound| {
+                    if let syn::TypeParamBound::Trait(trait_bound) = bound {
+                        trait_bound.path.segments.last().map(|s| s.ident.to_string())
+                    } else {
+                        None
+                    }
+                }).collect(),
+            })
+        } else {
+            None
+        }
+    }).collect();
+    
+    // Check if function is async
+    let is_async = sig.asyncness.is_some();
+    
+    // Extract monomorphize types from attributes
+    let monomorphize_types = extract_monomorphize_types(attrs);
+    
+    RustFunctionSignature {
+        sig,
+        generic_params,
+        is_async,
+        monomorphize_types,
+    }
+}
+
+/// Extract types from #[monomorphize(T1, T2, ...)] attribute
+fn extract_monomorphize_types(attrs: &[syn::Attribute]) -> Vec<String> {
+    for attr in attrs {
+        if let syn::Meta::List(meta_list) = &attr.meta {
+            if meta_list.path.is_ident("monomorphize") {
+                // Parse the token stream: (i32, f64, u8)
+                let tokens = &meta_list.tokens;
+                let tokens_str = tokens.to_string();
+                // Simple comma-separated parsing
+                return tokens_str
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+            }
+        }
+    }
+    Vec::new()
 }
 
 /// Parse a trait implementation (impl Trait for Type)
@@ -686,5 +755,38 @@ mod tests {
         let config: AutoZigConfig = syn::parse2(input).unwrap();
         assert!(!config.zig_code.is_empty());
         assert_eq!(config.rust_signatures.len(), 1);
+    }
+    
+    #[test]
+    fn test_parse_generic_function() {
+        let input = quote! {
+            export fn process_i32(ptr: [*]const i32, len: usize) usize {
+                return len;
+            }
+            ---
+            #[monomorphize(i32, f64)]
+            fn process<T>(data: &[T]) -> usize;
+        };
+        
+        let config: AutoZigConfig = syn::parse2(input).unwrap();
+        assert_eq!(config.rust_signatures.len(), 1);
+        let sig = &config.rust_signatures[0];
+        assert_eq!(sig.generic_params.len(), 1);
+        assert_eq!(sig.generic_params[0].name, "T");
+        assert_eq!(sig.monomorphize_types, vec!["i32", "f64"]);
+    }
+    
+    #[test]
+    fn test_parse_async_function() {
+        let input = quote! {
+            export fn async_compute(ptr: [*]const u8, len: usize) void {}
+            ---
+            async fn async_compute(data: &[u8]) -> Result<Vec<u8>, i32>;
+        };
+        
+        let config: AutoZigConfig = syn::parse2(input).unwrap();
+        assert_eq!(config.rust_signatures.len(), 1);
+        let sig = &config.rust_signatures[0];
+        assert!(sig.is_async);
     }
 }

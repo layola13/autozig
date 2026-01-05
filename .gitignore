@@ -31,3 +31,7 @@ Thumbs.db
 *.h
 bindings.rs
 generated_autozig.zig
+.project/
+autocxx/
+Raiden1990/
+*.log

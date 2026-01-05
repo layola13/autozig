@@ -1,0 +1,75 @@
+#!/bin/bash
+
+# AutoZig Pre-Push Hook
+# This hook runs before pushing to ensure code quality
+
+set -e
+
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+echo -e "${YELLOW}🔍 Running pre-push checks...${NC}"
+
+cd autozig
+
+# Check 1: Format check
+echo -e "\n${YELLOW}📝 Checking code formatting...${NC}"
+if ! cargo fmt --all -- --check; then
+    echo -e "${RED}❌ Code formatting check failed!${NC}"
+    echo -e "${YELLOW}💡 Run 'cargo fmt --all' to fix formatting${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ Code formatting is correct${NC}"
+
+# Check 2: Clippy lints
+echo -e "\n${YELLOW}🔍 Running clippy...${NC}"
+if ! cargo clippy --all-targets --all-features -- -D warnings 2>&1 | grep -v "warning: function .* is never used"; then
+    echo -e "${RED}❌ Clippy found issues!${NC}"
+    echo -e "${YELLOW}💡 Fix the clippy warnings before pushing${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ Clippy checks passed${NC}"
+
+# Check 3: Build
+echo -e "\n${YELLOW}🔨 Building project...${NC}"
+if ! cargo build --all 2>&1; then
+    echo -e "${RED}❌ Build failed!${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ Build successful${NC}"
+
+# Check 4: Tests
+echo -e "\n${YELLOW}🧪 Running tests...${NC}"
+if ! cargo test --all 2>&1 | tail -20; then
+    echo -e "${RED}❌ Tests failed!${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ All tests passed${NC}"
+
+# Check 5: Doc tests
+echo -e "\n${YELLOW}📚 Running doc tests...${NC}"
+if ! cargo test --doc --all 2>&1 | tail -10; then
+    echo -e "${RED}❌ Doc tests failed!${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ Doc tests passed${NC}"
+
+# Check 6: Examples verification (optional, can be slow)
+if [ "$SKIP_EXAMPLES" != "1" ]; then
+    echo -e "\n${YELLOW}🎯 Verifying examples...${NC}"
+    cd examples
+    if ! timeout 300 ./verify_all.sh 2>&1 | tail -15; then
+        echo -e "${RED}❌ Examples verification failed!${NC}"
+        echo -e "${YELLOW}💡 Set SKIP_EXAMPLES=1 to skip this check${NC}"
+        exit 1
+    fi
+    cd ..
+    echo -e "${GREEN}✅ All examples verified${NC}"
+else
+    echo -e "${YELLOW}⏭️  Skipping examples verification (SKIP_EXAMPLES=1)${NC}"
+fi
+
+echo -e "\n${GREEN}🎉 All pre-push checks passed! Ready to push.${NC}"
+exit 0

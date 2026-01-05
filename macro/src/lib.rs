@@ -53,12 +53,11 @@ pub fn autozig(input: TokenStream) -> TokenStream {
         // Generate trait impl target types (ZST structs for Phase 1)
         let trait_impl_types = generate_trait_impl_types(&config);
         
-        // Generate extern "C" FFI declarations from signatures and trait impls
-        let ffi_decls = generate_ffi_declarations(&config);
-        let trait_ffi_decls = generate_trait_ffi_declarations(&config);
+        // Phase 3: Generate FFI declarations and wrappers with monomorphization and async support
+        let (ffi_decls, wrappers) = generate_with_monomorphization(&config);
         
-        // Generate safe wrappers
-        let wrappers = generate_safe_wrappers(&config);
+        // Generate trait FFI declarations
+        let trait_ffi_decls = generate_trait_ffi_declarations(&config);
         
         // Generate trait implementations
         let trait_impls = generate_trait_implementations(&config);
@@ -136,129 +135,6 @@ fn is_slice_or_str_ref(ty: &syn::Type) -> Option<(bool, Option<syn::Type>)> {
     None
 }
 
-/// Generate extern "C" FFI declarations with smart lowering
-/// High-level types like &str, &[T] are lowered to ptr+len
-fn generate_ffi_declarations(config: &AutoZigConfig) -> proc_macro2::TokenStream {
-    let mut decls = Vec::new();
-    
-    for rust_sig in &config.rust_signatures {
-        let sig = &rust_sig.sig;
-        let fn_name = &sig.ident;
-        let output = &sig.output;
-        
-        // Build lowered FFI signature
-        let mut ffi_params = Vec::new();
-        
-        for input in &sig.inputs {
-            if let syn::FnArg::Typed(pat_type) = input {
-                let param_type = &pat_type.ty;
-                
-                // Extract parameter name as string
-                let param_name_str = if let syn::Pat::Ident(ident) = &*pat_type.pat {
-                    ident.ident.to_string()
-                } else {
-                    continue; // Skip complex patterns
-                };
-                
-                // Check if this is a slice or str reference
-                if let Some((is_mut, elem_type)) = is_slice_or_str_ref(param_type) {
-                    // Lower to ptr + len
-                    let ptr_type = if let Some(elem) = elem_type {
-                        // &[T] or &mut [T]
-                        if is_mut {
-                            quote! { *mut #elem }
-                        } else {
-                            quote! { *const #elem }
-                        }
-                    } else {
-                        // &str or &mut str
-                        if is_mut {
-                            quote! { *mut u8 }
-                        } else {
-                            quote! { *const u8 }
-                        }
-                    };
-                    
-                    // Generate two parameters: ptr and len
-                    let ptr_name = quote::format_ident!("{}_ptr", param_name_str);
-                    let len_name = quote::format_ident!("{}_len", param_name_str);
-                    
-                    ffi_params.push(quote! { #ptr_name: #ptr_type });
-                    ffi_params.push(quote! { #len_name: usize });
-                } else {
-                    // Keep original parameter
-                    let param_name = &pat_type.pat;
-                    ffi_params.push(quote! { #param_name: #param_type });
-                }
-            }
-        }
-        
-        // Generate FFI declaration with lowered signature
-        decls.push(quote! {
-            extern "C" {
-                pub fn #fn_name(#(#ffi_params),*) #output;
-            }
-        });
-    }
-    
-    quote! {
-        #(#decls)*
-    }
-}
-
-/// Generate safe Rust wrapper functions with smart lowering
-fn generate_safe_wrappers(config: &AutoZigConfig) -> proc_macro2::TokenStream {
-    let mut wrappers = Vec::new();
-    let mod_name = syn::Ident::new(config.get_mod_name(), proc_macro2::Span::call_site());
-    
-    for rust_sig in &config.rust_signatures {
-        let sig = &rust_sig.sig;
-        let fn_name = &sig.ident;
-        let inputs = &sig.inputs;
-        let output = &sig.output;
-        
-        // Build FFI call arguments with conversions
-        let mut ffi_args = Vec::new();
-        
-        for input in &sig.inputs {
-            if let syn::FnArg::Typed(pat_type) = input {
-                if let syn::Pat::Ident(ident) = &*pat_type.pat {
-                    let param_name = &ident.ident;
-                    let param_type = &pat_type.ty;
-                    
-                    // Check if this is a slice or str reference
-                    if let Some((is_mut, _elem_type)) = is_slice_or_str_ref(param_type) {
-                        // Convert to ptr + len
-                        if is_mut {
-                            ffi_args.push(quote! { #param_name.as_mut_ptr() });
-                        } else {
-                            ffi_args.push(quote! { #param_name.as_ptr() });
-                        }
-                        ffi_args.push(quote! { #param_name.len() });
-                    } else {
-                        // Direct pass-through
-                        ffi_args.push(quote! { #param_name });
-                    }
-                }
-            }
-        }
-        
-        // Generate wrapper with automatic conversions
-        let wrapper = quote! {
-            pub fn #fn_name(#inputs) #output {
-                unsafe {
-                    #mod_name::#fn_name(#(#ffi_args),*)
-                }
-            }
-        };
-        
-        wrappers.push(wrapper);
-    }
-    
-    quote! {
-        #(#wrappers)*
-    }
-}
 
 /// Generate ZST struct types for trait implementations (Phase 1)
 /// Generate Opaque Pointer struct types for stateful trait implementations (Phase 2)
@@ -734,11 +610,8 @@ pub fn include_zig(input: TokenStream) -> TokenStream {
         // Generate struct definitions
         let struct_defs = generate_struct_definitions_for_include(&config);
         
-        // Generate extern "C" FFI declarations
-        let ffi_decls = generate_ffi_declarations_for_include(&config);
-        
-        // Generate safe wrappers
-        let wrappers = generate_safe_wrappers_for_include(&config);
+        // Phase 3: Use monomorphization-aware generation for include_zig! too
+        let (ffi_decls, wrappers) = generate_with_monomorphization_for_include(&config);
         
         quote! {
             // Marker for scanner (will be removed in final output)
@@ -966,6 +839,419 @@ fn generate_trait_implementations_for_include(config: &IncludeZigConfig) -> proc
     quote! {
         #(#impls)*
     }
+}
+
+// ============================================================================
+// Phase 3: Generics and Async Support
+// ============================================================================
+
+/// Phase 3: Generate FFI declarations and wrappers with monomorphization support
+fn generate_with_monomorphization(config: &AutoZigConfig) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
+    let mut all_ffi_decls = Vec::new();
+    let mut all_wrappers = Vec::new();
+    
+    for rust_sig in &config.rust_signatures {
+        if !rust_sig.generic_params.is_empty() && !rust_sig.monomorphize_types.is_empty() {
+            // Generic function with monomorphization attribute
+            let (mono_ffi, mono_wrappers) = generate_monomorphized_versions(rust_sig, config.get_mod_name());
+            all_ffi_decls.push(mono_ffi);
+            all_wrappers.push(mono_wrappers);
+        } else if rust_sig.is_async {
+            // Async function
+            let (async_ffi, async_wrapper) = generate_async_ffi_and_wrapper(rust_sig, config.get_mod_name());
+            all_ffi_decls.push(async_ffi);
+            all_wrappers.push(async_wrapper);
+        } else {
+            // Regular function (non-generic, non-async)
+            let ffi_decl = generate_single_ffi_declaration(rust_sig);
+            let wrapper = generate_single_safe_wrapper(rust_sig, config.get_mod_name());
+            all_ffi_decls.push(ffi_decl);
+            all_wrappers.push(wrapper);
+        }
+    }
+    
+    let ffi_decls = quote! { #(#all_ffi_decls)* };
+    let wrappers = quote! { #(#all_wrappers)* };
+    
+    (ffi_decls, wrappers)
+}
+
+/// Generate single FFI declaration for regular (non-generic) function
+fn generate_single_ffi_declaration(rust_sig: &autozig_parser::RustFunctionSignature) -> proc_macro2::TokenStream {
+    let sig = &rust_sig.sig;
+    let fn_name = &sig.ident;
+    let output = &sig.output;
+    
+    let mut ffi_params = Vec::new();
+    
+    for input in &sig.inputs {
+        if let syn::FnArg::Typed(pat_type) = input {
+            let param_type = &pat_type.ty;
+            let param_name_str = if let syn::Pat::Ident(ident) = &*pat_type.pat {
+                ident.ident.to_string()
+            } else {
+                continue;
+            };
+            
+            if let Some((is_mut, elem_type)) = is_slice_or_str_ref(param_type) {
+                let ptr_type = if let Some(elem) = elem_type {
+                    if is_mut {
+                        quote! { *mut #elem }
+                    } else {
+                        quote! { *const #elem }
+                    }
+                } else {
+                    if is_mut {
+                        quote! { *mut u8 }
+                    } else {
+                        quote! { *const u8 }
+                    }
+                };
+                
+                let ptr_name = quote::format_ident!("{}_ptr", param_name_str);
+                let len_name = quote::format_ident!("{}_len", param_name_str);
+                
+                ffi_params.push(quote! { #ptr_name: #ptr_type });
+                ffi_params.push(quote! { #len_name: usize });
+            } else {
+                let param_name = &pat_type.pat;
+                ffi_params.push(quote! { #param_name: #param_type });
+            }
+        }
+    }
+    
+    quote! {
+        extern "C" {
+            pub fn #fn_name(#(#ffi_params),*) #output;
+        }
+    }
+}
+
+/// Generate single safe wrapper for regular (non-generic) function
+fn generate_single_safe_wrapper(rust_sig: &autozig_parser::RustFunctionSignature, mod_name: &str) -> proc_macro2::TokenStream {
+    let sig = &rust_sig.sig;
+    let fn_name = &sig.ident;
+    let inputs = &sig.inputs;
+    let output = &sig.output;
+    let mod_ident = syn::Ident::new(mod_name, proc_macro2::Span::call_site());
+    
+    let mut ffi_args = Vec::new();
+    
+    for input in &sig.inputs {
+        if let syn::FnArg::Typed(pat_type) = input {
+            if let syn::Pat::Ident(ident) = &*pat_type.pat {
+                let param_name = &ident.ident;
+                let param_type = &pat_type.ty;
+                
+                if let Some((is_mut, _elem_type)) = is_slice_or_str_ref(param_type) {
+                    if is_mut {
+                        ffi_args.push(quote! { #param_name.as_mut_ptr() });
+                    } else {
+                        ffi_args.push(quote! { #param_name.as_ptr() });
+                    }
+                    ffi_args.push(quote! { #param_name.len() });
+                } else {
+                    ffi_args.push(quote! { #param_name });
+                }
+            }
+        }
+    }
+    
+    quote! {
+        pub fn #fn_name(#inputs) #output {
+            unsafe {
+                #mod_ident::#fn_name(#(#ffi_args),*)
+            }
+        }
+    }
+}
+
+/// Phase 3: Generate monomorphized versions for a generic function
+fn generate_monomorphized_versions(
+    rust_sig: &autozig_parser::RustFunctionSignature,
+    mod_name: &str,
+) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
+    let mut ffi_decls = Vec::new();
+    let mut wrappers = Vec::new();
+    
+    let base_name = &rust_sig.sig.ident;
+    
+    for mono_type in &rust_sig.monomorphize_types {
+        // Generate mangled name: process<T> + i32 -> process_i32
+        let mono_name = syn::Ident::new(
+            &format!("{}_{}", base_name, mono_type.replace("::", "_")),
+            proc_macro2::Span::call_site()
+        );
+        
+        // Substitute generic type T with concrete type
+        let mono_sig = substitute_generic_type(&rust_sig.sig, mono_type);
+        
+        // Generate FFI declaration for this monomorphized version
+        let ffi_decl = generate_ffi_declaration_from_sig(&mono_name, &mono_sig);
+        ffi_decls.push(ffi_decl);
+        
+        // Generate safe wrapper for this monomorphized version
+        let wrapper = generate_wrapper_from_sig(&mono_name, &mono_sig, mod_name);
+        wrappers.push(wrapper);
+    }
+    
+    let ffi_output = quote! { #(#ffi_decls)* };
+    let wrapper_output = quote! { #(#wrappers)* };
+    
+    (ffi_output, wrapper_output)
+}
+
+/// Substitute generic type parameter with concrete type
+fn substitute_generic_type(sig: &syn::Signature, concrete_type: &str) -> syn::Signature {
+    let mut new_sig = sig.clone();
+    
+    // Parse concrete type
+    let concrete_ty: syn::Type = syn::parse_str(concrete_type).unwrap_or_else(|_| {
+        panic!("Invalid type: {}", concrete_type)
+    });
+    
+    // Get generic parameter name (e.g., "T")
+    let generic_name = if let Some(syn::GenericParam::Type(type_param)) = sig.generics.params.first() {
+        type_param.ident.to_string()
+    } else {
+        return new_sig; // No generics
+    };
+    
+    // Remove generics from signature
+    new_sig.generics = syn::Generics::default();
+    
+    // Substitute type in parameters
+    for input in &mut new_sig.inputs {
+        if let syn::FnArg::Typed(pat_type) = input {
+            pat_type.ty = Box::new(substitute_type_recursive(&pat_type.ty, &generic_name, &concrete_ty));
+        }
+    }
+    
+    // Substitute type in return type
+    if let syn::ReturnType::Type(_, ret_ty) = &mut new_sig.output {
+        *ret_ty = Box::new(substitute_type_recursive(ret_ty, &generic_name, &concrete_ty));
+    }
+    
+    new_sig
+}
+
+/// Recursively substitute generic type in a type expression
+fn substitute_type_recursive(ty: &syn::Type, generic_name: &str, concrete_ty: &syn::Type) -> syn::Type {
+    match ty {
+        syn::Type::Path(type_path) => {
+            // Check if this is the generic parameter
+            if type_path.path.is_ident(generic_name) {
+                concrete_ty.clone()
+            } else {
+                ty.clone()
+            }
+        }
+        syn::Type::Reference(type_ref) => {
+            let mut new_ref = type_ref.clone();
+            new_ref.elem = Box::new(substitute_type_recursive(&type_ref.elem, generic_name, concrete_ty));
+            syn::Type::Reference(new_ref)
+        }
+        syn::Type::Slice(type_slice) => {
+            let mut new_slice = type_slice.clone();
+            new_slice.elem = Box::new(substitute_type_recursive(&type_slice.elem, generic_name, concrete_ty));
+            syn::Type::Slice(new_slice)
+        }
+        _ => ty.clone(),
+    }
+}
+
+/// Generate FFI declaration from signature with specific name
+fn generate_ffi_declaration_from_sig(fn_name: &syn::Ident, sig: &syn::Signature) -> proc_macro2::TokenStream {
+    let output = &sig.output;
+    
+    let mut ffi_params = Vec::new();
+    
+    for input in &sig.inputs {
+        if let syn::FnArg::Typed(pat_type) = input {
+            let param_type = &pat_type.ty;
+            let param_name_str = if let syn::Pat::Ident(ident) = &*pat_type.pat {
+                ident.ident.to_string()
+            } else {
+                continue;
+            };
+            
+            if let Some((is_mut, elem_type)) = is_slice_or_str_ref(param_type) {
+                let ptr_type = if let Some(elem) = elem_type {
+                    if is_mut {
+                        quote! { *mut #elem }
+                    } else {
+                        quote! { *const #elem }
+                    }
+                } else {
+                    if is_mut {
+                        quote! { *mut u8 }
+                    } else {
+                        quote! { *const u8 }
+                    }
+                };
+                
+                let ptr_name = quote::format_ident!("{}_ptr", param_name_str);
+                let len_name = quote::format_ident!("{}_len", param_name_str);
+                
+                ffi_params.push(quote! { #ptr_name: #ptr_type });
+                ffi_params.push(quote! { #len_name: usize });
+            } else {
+                let param_name = &pat_type.pat;
+                ffi_params.push(quote! { #param_name: #param_type });
+            }
+        }
+    }
+    
+    quote! {
+        extern "C" {
+            pub fn #fn_name(#(#ffi_params),*) #output;
+        }
+    }
+}
+
+/// Generate safe wrapper from signature with specific name
+fn generate_wrapper_from_sig(fn_name: &syn::Ident, sig: &syn::Signature, mod_name: &str) -> proc_macro2::TokenStream {
+    let mod_ident = syn::Ident::new(mod_name, proc_macro2::Span::call_site());
+    let inputs = &sig.inputs;
+    let output = &sig.output;
+    
+    let mut ffi_args = Vec::new();
+    
+    for input in &sig.inputs {
+        if let syn::FnArg::Typed(pat_type) = input {
+            if let syn::Pat::Ident(ident) = &*pat_type.pat {
+                let param_name = &ident.ident;
+                let param_type = &pat_type.ty;
+                
+                if let Some((is_mut, _elem_type)) = is_slice_or_str_ref(param_type) {
+                    if is_mut {
+                        ffi_args.push(quote! { #param_name.as_mut_ptr() });
+                    } else {
+                        ffi_args.push(quote! { #param_name.as_ptr() });
+                    }
+                    ffi_args.push(quote! { #param_name.len() });
+                } else {
+                    ffi_args.push(quote! { #param_name });
+                }
+            }
+        }
+    }
+    
+    quote! {
+        /// Monomorphized wrapper (generated by autozig)
+        pub fn #fn_name(#inputs) #output {
+            unsafe {
+                #mod_ident::#fn_name(#(#ffi_args),*)
+            }
+        }
+    }
+}
+
+/// Phase 3.2: Generate async FFI and wrapper using spawn_blocking pattern
+/// Architecture: "Rust Async Wrapper, Zig Sync Execution"
+/// - Zig writes normal synchronous code (no async/await needed in Zig)
+/// - Rust async fn automatically uses tokio::task::spawn_blocking
+/// - This prevents blocking the async runtime while maintaining async interface
+fn generate_async_ffi_and_wrapper(
+    rust_sig: &autozig_parser::RustFunctionSignature,
+    mod_name: &str,
+) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
+    let fn_name = &rust_sig.sig.ident;
+    let sig = &rust_sig.sig;
+    
+    // Generate standard synchronous FFI declaration
+    // Zig side is always synchronous - no async/await needed!
+    let ffi_decl = generate_ffi_declaration_from_sig(fn_name, sig);
+    
+    // Build wrapper parameters and FFI call arguments
+    let inputs = &sig.inputs;
+    let output = &sig.output;
+    let mod_ident = syn::Ident::new(mod_name, proc_macro2::Span::call_site());
+    
+    let mut ffi_args = Vec::new();
+    let mut param_captures = Vec::new();
+    
+    for input in &sig.inputs {
+        if let syn::FnArg::Typed(pat_type) = input {
+            if let syn::Pat::Ident(ident) = &*pat_type.pat {
+                let param_name = &ident.ident;
+                let param_type = &pat_type.ty;
+                
+                // For async, we need to move parameters into the closure
+                // For slices/strings, we need to convert to owned data
+                if let Some((_is_mut, _elem_type)) = is_slice_or_str_ref(param_type) {
+                    // Convert slice to Vec to own the data
+                    param_captures.push(quote! {
+                        let #param_name = #param_name.to_vec();
+                    });
+                    
+                    ffi_args.push(quote! { #param_name.as_ptr() });
+                    ffi_args.push(quote! { #param_name.len() });
+                } else {
+                    // For Copy types, just capture them
+                    ffi_args.push(quote! { #param_name });
+                }
+            }
+        }
+    }
+    
+    // Generate async wrapper using spawn_blocking
+    let wrapper = quote! {
+        /// Async wrapper (auto-generated by AutoZig Phase 3.2)
+        ///
+        /// This function uses tokio::task::spawn_blocking to offload the
+        /// synchronous Zig FFI call to a dedicated thread pool, preventing
+        /// blocking of the async runtime.
+        ///
+        /// Zig side: Write normal synchronous code, no async/await needed!
+        pub async fn #fn_name(#inputs) #output {
+            // Capture parameters (convert slices to owned Vec)
+            #(#param_captures)*
+            
+            // Offload to blocking thread pool
+            tokio::task::spawn_blocking(move || {
+                unsafe {
+                    #mod_ident::#fn_name(#(#ffi_args),*)
+                }
+            })
+            .await
+            .expect("Zig task panicked or was cancelled")
+        }
+    };
+    
+    (ffi_decl, wrapper)
+}
+
+/// Phase 3: Generate FFI declarations and wrappers with monomorphization support for include_zig!
+fn generate_with_monomorphization_for_include(config: &IncludeZigConfig) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
+    let mut all_ffi_decls = Vec::new();
+    let mut all_wrappers = Vec::new();
+    let mod_name = config.get_unique_mod_name();
+    
+    for rust_sig in &config.rust_signatures {
+        if !rust_sig.generic_params.is_empty() && !rust_sig.monomorphize_types.is_empty() {
+            // Generic function with monomorphization attribute
+            let (mono_ffi, mono_wrappers) = generate_monomorphized_versions(rust_sig, &mod_name);
+            all_ffi_decls.push(mono_ffi);
+            all_wrappers.push(mono_wrappers);
+        } else if rust_sig.is_async {
+            // Async function
+            let (async_ffi, async_wrapper) = generate_async_ffi_and_wrapper(rust_sig, &mod_name);
+            all_ffi_decls.push(async_ffi);
+            all_wrappers.push(async_wrapper);
+        } else {
+            // Regular function (non-generic, non-async)
+            let ffi_decl = generate_single_ffi_declaration(rust_sig);
+            let wrapper = generate_single_safe_wrapper(rust_sig, &mod_name);
+            all_ffi_decls.push(ffi_decl);
+            all_wrappers.push(wrapper);
+        }
+    }
+    
+    let ffi_decls = quote! { #(#all_ffi_decls)* };
+    let wrappers = quote! { #(#all_wrappers)* };
+    
+    (ffi_decls, wrappers)
 }
 
 #[cfg(test)]
