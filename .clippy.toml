@@ -16,4 +16,4 @@ too-many-arguments-threshold = 8
 too-many-lines-threshold = 200
 
 # Documentation
-missing-docs-in-private-items = false
+missing-docs-in-crate-items = false
