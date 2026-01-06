@@ -1,6 +1,6 @@
 [package]
 name = "autozig-build"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Build-time support for autozig"
@@ -11,5 +11,5 @@ keywords = ["ffi", "zig", "build"]
 categories = ["development-tools::ffi", "development-tools::build-utils"]
 
 [dependencies]
-autozig-engine = { path = "../../engine", version = "0.1.0" }
+autozig-engine = { path = "../../engine", version = "0.1.1" }
 anyhow = "1.0"
