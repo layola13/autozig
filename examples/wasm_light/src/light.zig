@@ -77,8 +77,10 @@ export fn render_lights_simd_raw(
                 base_b[offset] = @as(f32, @floatFromInt(background_buffer[bg_offset + 2]));
             }
 
-            // 累积光照强度（4 个像素）
-            var light_intensity = Vec4{ ambient, ambient, ambient, ambient };
+            // 🔥 累积彩色光照（RGB独立累加）
+            var light_r = Vec4{ 0.0, 0.0, 0.0, 0.0 };
+            var light_g = Vec4{ 0.0, 0.0, 0.0, 0.0 };
+            var light_b = Vec4{ 0.0, 0.0, 0.0, 0.0 };
 
             // 遍历所有光源
             var i: u32 = 0;
@@ -88,14 +90,20 @@ export fn render_lights_simd_raw(
                 const light_y = lights_ptr[light_offset + 1];
                 const light_z = lights_ptr[light_offset + 2];
                 const intensity = lights_ptr[light_offset + 3];
+                const light_color_r = lights_ptr[light_offset + 4]; // 🔥 光源RGB颜色
+                const light_color_g = lights_ptr[light_offset + 5];
+                const light_color_b = lights_ptr[light_offset + 6];
                 const radius = lights_ptr[light_offset + 7];
 
-                // 广播光源坐标到向量
+                // 广播光源坐标和颜色到向量
                 const vec_light_x = Vec4{ light_x, light_x, light_x, light_x };
                 const vec_light_y = Vec4{ light_y, light_y, light_y, light_y };
                 const vec_light_z = Vec4{ light_z, light_z, light_z, light_z };
                 const vec_radius = Vec4{ radius, radius, radius, radius };
                 const vec_intensity = Vec4{ intensity / 100.0, intensity / 100.0, intensity / 100.0, intensity / 100.0 };
+                const vec_color_r = Vec4{ light_color_r, light_color_r, light_color_r, light_color_r };
+                const vec_color_g = Vec4{ light_color_g, light_color_g, light_color_g, light_color_g };
+                const vec_color_b = Vec4{ light_color_b, light_color_b, light_color_b, light_color_b };
 
                 // SIMD 距离计算（4 个像素同时计算）
                 const dx = vec_x - vec_light_x;
@@ -109,18 +117,22 @@ export fn render_lights_simd_raw(
                 const norm_dist = dist / vec_radius;
                 const falloff = (Vec4{ 1.0, 1.0, 1.0, 1.0 } - norm_dist * norm_dist) * vec_intensity;
 
-                light_intensity += @select(f32, in_range, falloff, Vec4{ 0.0, 0.0, 0.0, 0.0 });
+                // 🔥 彩色光照贡献（每个RGB通道独立累加）
+                light_r += @select(f32, in_range, vec_color_r * falloff, Vec4{ 0.0, 0.0, 0.0, 0.0 });
+                light_g += @select(f32, in_range, vec_color_g * falloff, Vec4{ 0.0, 0.0, 0.0, 0.0 });
+                light_b += @select(f32, in_range, vec_color_b * falloff, Vec4{ 0.0, 0.0, 0.0, 0.0 });
             }
 
-            // 限制光照强度到 [ambient, 1.5]（允许过曝效果）
+            // 环境光照亮底图 + 彩色光照混合
             const vec_ambient = Vec4{ ambient, ambient, ambient, ambient };
-            const vec_max = Vec4{ 1.5, 1.5, 1.5, 1.5 };
-            const clamped_intensity = @min(vec_max, @max(vec_ambient, light_intensity));
+            const ambient_r = base_r * vec_ambient;
+            const ambient_g = base_g * vec_ambient;
+            const ambient_b = base_b * vec_ambient;
 
-            // 应用光照到底图（相乘）
-            const final_r = @min(Vec4{ 255.0, 255.0, 255.0, 255.0 }, base_r * clamped_intensity);
-            const final_g = @min(Vec4{ 255.0, 255.0, 255.0, 255.0 }, base_g * clamped_intensity);
-            const final_b = @min(Vec4{ 255.0, 255.0, 255.0, 255.0 }, base_b * clamped_intensity);
+            // 应用彩色光照到底图（加法混合，允许过曝）
+            const final_r = @min(Vec4{ 255.0, 255.0, 255.0, 255.0 }, ambient_r + light_r);
+            const final_g = @min(Vec4{ 255.0, 255.0, 255.0, 255.0 }, ambient_g + light_g);
+            const final_b = @min(Vec4{ 255.0, 255.0, 255.0, 255.0 }, ambient_b + light_b);
 
             // 写入 4 个像素（展开循环）
             inline for (0..4) |offset| {
@@ -142,7 +154,9 @@ export fn render_lights_simd_raw(
             const base_g = @as(f32, @floatFromInt(background_buffer[pixel_offset + 1]));
             const base_b = @as(f32, @floatFromInt(background_buffer[pixel_offset + 2]));
 
-            var light_intensity: f32 = ambient;
+            var light_r: f32 = 0.0;
+            var light_g: f32 = 0.0;
+            var light_b: f32 = 0.0;
 
             var i: u32 = 0;
             while (i < num_lights) : (i += 1) {
@@ -151,6 +165,9 @@ export fn render_lights_simd_raw(
                 const light_y = lights_ptr[light_offset + 1];
                 const light_z = lights_ptr[light_offset + 2];
                 const intensity = lights_ptr[light_offset + 3];
+                const light_color_r = lights_ptr[light_offset + 4];
+                const light_color_g = lights_ptr[light_offset + 5];
+                const light_color_b = lights_ptr[light_offset + 6];
                 const radius = lights_ptr[light_offset + 7];
 
                 const dx = pixel_x - light_x;
@@ -161,14 +178,15 @@ export fn render_lights_simd_raw(
                 if (dist < radius) {
                     const norm_dist = dist / radius;
                     const falloff = (1.0 - norm_dist * norm_dist) * (intensity / 100.0);
-                    light_intensity += falloff;
+                    light_r += light_color_r * falloff;
+                    light_g += light_color_g * falloff;
+                    light_b += light_color_b * falloff;
                 }
             }
 
-            const clamped_intensity = @min(1.5, @max(ambient, light_intensity));
-            const final_r = @min(255.0, base_r * clamped_intensity);
-            const final_g = @min(255.0, base_g * clamped_intensity);
-            const final_b = @min(255.0, base_b * clamped_intensity);
+            const final_r = @min(255.0, base_r * ambient + light_r);
+            const final_g = @min(255.0, base_g * ambient + light_g);
+            const final_b = @min(255.0, base_b * ambient + light_b);
 
             pixel_ptr[pixel_offset + 0] = @intFromFloat(final_r);
             pixel_ptr[pixel_offset + 1] = @intFromFloat(final_g);
@@ -201,7 +219,9 @@ export fn render_lights_scalar_raw(
             const base_g = @as(f32, @floatFromInt(background_buffer[pixel_offset + 1]));
             const base_b = @as(f32, @floatFromInt(background_buffer[pixel_offset + 2]));
 
-            var light_intensity: f32 = ambient;
+            var light_r: f32 = 0.0;
+            var light_g: f32 = 0.0;
+            var light_b: f32 = 0.0;
 
             var i: u32 = 0;
             while (i < num_lights) : (i += 1) {
@@ -210,6 +230,9 @@ export fn render_lights_scalar_raw(
                 const light_y = lights_ptr[light_offset + 1];
                 const light_z = lights_ptr[light_offset + 2];
                 const intensity = lights_ptr[light_offset + 3];
+                const light_color_r = lights_ptr[light_offset + 4];
+                const light_color_g = lights_ptr[light_offset + 5];
+                const light_color_b = lights_ptr[light_offset + 6];
                 const radius = lights_ptr[light_offset + 7];
 
                 const dx = pixel_x - light_x;
@@ -220,14 +243,15 @@ export fn render_lights_scalar_raw(
                 if (dist < radius) {
                     const norm_dist = dist / radius;
                     const falloff = (1.0 - norm_dist * norm_dist) * (intensity / 100.0);
-                    light_intensity += falloff;
+                    light_r += light_color_r * falloff;
+                    light_g += light_color_g * falloff;
+                    light_b += light_color_b * falloff;
                 }
             }
 
-            const clamped_intensity = @min(1.5, @max(ambient, light_intensity));
-            const final_r = @min(255.0, base_r * clamped_intensity);
-            const final_g = @min(255.0, base_g * clamped_intensity);
-            const final_b = @min(255.0, base_b * clamped_intensity);
+            const final_r = @min(255.0, base_r * ambient + light_r);
+            const final_g = @min(255.0, base_g * ambient + light_g);
+            const final_b = @min(255.0, base_b * ambient + light_b);
 
             pixel_ptr[pixel_offset + 0] = @intFromFloat(final_r);
             pixel_ptr[pixel_offset + 1] = @intFromFloat(final_g);

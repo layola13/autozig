@@ -434,7 +434,7 @@
         let isRunning = false;
         let animTime = 0;
 
-        // 初始化光源
+        // 初始化光源 - 使用固定颜色（红、黄、紫、橙、绿、青）
         function initLights() {
             lights = [];
             const radius = parseFloat(document.getElementById('lightRadius').value);
@@ -443,16 +443,32 @@
 
             lightsBufferPtr = wasm_alloc_lights_buffer(numLights);
 
+            // 预定义的彩色光源（RGB值）
+            const lightColors = [
+                { r: 255, g: 50, b: 50 },    // 红色
+                { r: 255, g: 200, b: 50 },   // 黄色
+                { r: 200, g: 50, b: 255 },   // 紫色
+                { r: 255, g: 150, b: 50 },   // 橙色
+                { r: 50, g: 255, b: 100 },   // 绿色
+                { r: 50, g: 200, b: 255 },   // 青色
+                { r: 255, g: 100, b: 150 },  // 粉色
+                { r: 150, g: 255, b: 50 },   // 黄绿色
+                { r: 100, g: 150, b: 255 },  // 蓝紫色
+                { r: 255, g: 50, b: 150 },   // 玫红色
+            ];
+
             for (let i = 0; i < numLights; i++) {
                 const angle = (i / numLights) * Math.PI * 2;
+                const color = lightColors[i % lightColors.length]; // 循环使用颜色
+                
                 lights.push({
                     x: WIDTH / 2 + Math.cos(angle) * 100,
                     y: HEIGHT / 2 + Math.sin(angle) * 100,
                     z: 50,
                     intensity: intensity,
-                    r: Math.random() * 200 + 55,
-                    g: Math.random() * 200 + 55,
-                    b: Math.random() * 200 + 55,
+                    r: color.r,
+                    g: color.g,
+                    b: color.b,
                     radius: radius,
                     angle: angle,
                     speed: Math.random() * 0.5 + 0.5
@@ -511,10 +527,12 @@
                     const base_g = backgroundView[bgIdx + 1];
                     const base_b = backgroundView[bgIdx + 2];
 
-                    // 初始化光照强度为环境光
-                    let light_intensity = ambient;
+                    // 🔥 累积彩色光照（RGB独立）
+                    let light_r = 0.0;
+                    let light_g = 0.0;
+                    let light_b = 0.0;
 
-                    // 累积所有光源的光照
+                    // 累积所有光源的彩色光照
                     for (const light of lights) {
                         const dx = x - light.x;
                         const dy = y - light.y;
@@ -522,20 +540,21 @@
                         const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
                         if (dist < light.radius) {
-                            // 平方衰减光照模型（匹配light.zig第163行）
+                            // 平方衰减光照模型
                             const norm_dist = dist / light.radius;
                             const falloff = (1.0 - norm_dist * norm_dist) * (light.intensity / 100.0);
-                            light_intensity += falloff;
+                            
+                            // 🔥 彩色光照贡献（每个RGB通道独立）
+                            light_r += light.r * falloff;
+                            light_g += light.g * falloff;
+                            light_b += light.b * falloff;
                         }
                     }
 
-                    // 限制光照强度到 [ambient, 1.5]（允许过曝效果）
-                    const clamped_intensity = Math.min(1.5, Math.max(ambient, light_intensity));
-
-                    // 应用光照到底图（相乘）
-                    const final_r = Math.min(255, base_r * clamped_intensity);
-                    const final_g = Math.min(255, base_g * clamped_intensity);
-                    const final_b = Math.min(255, base_b * clamped_intensity);
+                    // 环境光照亮底图 + 彩色光照混合
+                    const final_r = Math.min(255, base_r * ambient + light_r);
+                    const final_g = Math.min(255, base_g * ambient + light_g);
+                    const final_b = Math.min(255, base_b * ambient + light_b);
 
                     data[idx + 0] = final_r;
                     data[idx + 1] = final_g;
