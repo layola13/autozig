@@ -1,6 +1,6 @@
 [package]
 name = "autozig-engine"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Core engine for autozig code generation"
@@ -11,7 +11,7 @@ keywords = ["ffi", "zig", "codegen"]
 categories = ["development-tools::ffi", "api-bindings"]
 
 [dependencies]
-autozig-parser = { path = "../parser", version = "0.1.1" }
+autozig-parser = { path = "../parser", version = "0.1.2" }
 syn = { version = "2.0", features = ["full", "parsing", "printing", "visit"] }
 quote = "1.0"
 proc-macro2 = "1.0"
