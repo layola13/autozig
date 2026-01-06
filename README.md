@@ -3,7 +3,7 @@
 
 # AutoZig
 
-![AutoZig Logo](logos/logofull.png)
+![AutoZig Logo](logos/logo.jpg)
 
 ### Safe Rust to Zig FFI with Generics, Async & Stream Support
 
@@ -176,7 +176,7 @@ wasm-pack build --target web
 
 #### 🌊 Stream Support
 
-异步数据流支持，基于 `futures::Stream` trait：
+Async data stream support based on the `futures::Stream` trait:
 
 ```rust
 use autozig::stream::create_stream;
@@ -762,7 +762,7 @@ at your option.
 
 ## ⚠️ Status
 
-> **✅ Phase 1-5 Complete!** - AutoZig 全功能完成，支持 WebAssembly！
+> **✅ Phase 1-5 Complete!** - AutoZig is feature-complete with full WebAssembly support!
 >
 > **Current Status:**
 > - ✅ Phase 1: Basic FFI bindings (100%)
@@ -800,7 +800,7 @@ at your option.
 - 🗺️ [Trait Support Design](docs/TRAIT_SUPPORT_DESIGN.md)
 - 🛡️ [Security Best Practices](docs/SECURITY_BEST_PRACTICES.md)
 - 🔒 [Zero Unsafe Achievement](docs/ZERO_UNSAFE_ACHIEVEMENT.md)
-- 📋 [Feature Summary](docs/AUTOZIG_功能总结.md) - Complete feature checklist
+- 📋 [Feature Summary (Chinese)](docs/AUTOZIG_功能总结.md) - Complete feature checklist
 
 ### Examples
 - 📂 [Examples Directory](examples/) - 14 working examples
