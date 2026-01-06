@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoZig WASM 图像滤镜 Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: url('logofull.png') center/cover no-repeat fixed;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .upload-section {
+            text-align: center;
+            padding: 40px;
+            border: 3px dashed #667eea;
+            border-radius: 10px;
+            background: #f8f9ff;
+            margin-bottom: 30px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .upload-section:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+            transform: translateY(-2px);
+        }
+
+        .upload-section.dragover {
+            border-color: #764ba2;
+            background: #e8ebff;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .upload-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+
+        .canvas-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .canvas-wrapper {
+            text-align: center;
+        }
+
+        .canvas-wrapper h3 {
+            margin-bottom: 10px;
+            color: #667eea;
+        }
+
+        canvas {
+            max-width: 100%;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .controls {
+            background: #f8f9ff;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .controls h3 {
+            margin-bottom: 20px;
+            color: #667eea;
+            text-align: center;
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .filter-btn {
+            padding: 12px 30px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .filter-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        .filter-btn:active {
+            transform: translateY(0);
+        }
+
+        .brightness-control {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+        }
+
+        .brightness-control label {
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .brightness-control input[type="range"] {
+            flex: 1;
+            max-width: 300px;
+        }
+
+        .brightness-control span {
+            min-width: 40px;
+            text-align: center;
+            font-weight: bold;
+            color: #764ba2;
+        }
+
+        .stats {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            text-align: center;
+        }
+
+        .stat-item {
+            padding: 15px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #f8f9ff 0%, #e8ebff 100%);
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .canvas-container {
+                grid-template-columns: 1fr;
+            }
+
+            .stats {
+                grid-template-columns: 1fr;
+            }
+
+            .filter-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 AutoZig WASM 图像滤镜</h1>
+            <p>体验 Zig + Rust + WASM 的极致性能</p>
+        </div>
+
+        <div class="content">
+            <div class="upload-section" id="uploadSection">
+                <div class="upload-icon">📁</div>
+                <h2>点击或拖拽上传图片</h2>
+                <p style="margin-top: 10px; color: #666;">支持 JPG, PNG, GIF 等格式</p>
+                <input type="file" id="fileInput" accept="image/*">
+            </div>
+
+            <div id="editorSection" class="hidden">
+                <div class="canvas-container">
+                    <div class="canvas-wrapper">
+                        <h3>📷 原始图像</h3>
+                        <canvas id="originalCanvas"></canvas>
+                    </div>
+                    <div class="canvas-wrapper">
+                        <h3>✨ 处理后图像</h3>
+                        <canvas id="filteredCanvas"></canvas>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <h3>🎛️ 滤镜控制</h3>
+                    <div class="filter-buttons">
+                        <button class="filter-btn" onclick="applyInvert()">🔄 反色</button>
+                        <button class="filter-btn" onclick="applyGrayscale()">⚫ 灰度</button>
+                    </div>
+                    <div class="brightness-control">
+                        <label>☀️ 亮度调整（实时）:</label>
+                        <input type="range" id="brightnessSlider" min="-100" max="100" value="0" step="1">
+                        <span id="brightnessValue">0</span>
+                    </div>
+                </div>
+
+                <div class="stats">
+                    <div class="stat-item">
+                        <div class="stat-label">⏱️ 处理时间</div>
+                        <div class="stat-value" id="processingTime">-</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">📦 数据大小</div>
+                        <div class="stat-value" id="dataSize">-</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">🚀 处理速度</div>
+                        <div class="stat-value" id="throughput">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import init, { apply_invert, apply_grayscale, apply_brightness } from './pkg/autozig_wasm_filter.js';
+
+        let originalImageData = null;
+        let currentImageData = null;
+
+        // 初始化 WASM
+        await init();
+        console.log('✅ WASM 模块加载成功');
+
+        // 文件上传处理
+        const fileInput = document.getElementById('fileInput');
+        const uploadSection = document.getElementById('uploadSection');
+        const editorSection = document.getElementById('editorSection');
+
+        uploadSection.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                loadImage(e.target.files[0]);
+            }
+        });
+
+        // 拖拽上传
+        uploadSection.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadSection.classList.add('dragover');
+        });
+
+        uploadSection.addEventListener('dragleave', () => {
+            uploadSection.classList.remove('dragover');
+        });
+
+        uploadSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadSection.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                loadImage(e.dataTransfer.files[0]);
+            }
+        });
+
+        // 加载图片
+        function loadImage(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const originalCanvas = document.getElementById('originalCanvas');
+                    const filteredCanvas = document.getElementById('filteredCanvas');
+
+                    // 设置画布大小
+                    originalCanvas.width = filteredCanvas.width = img.width;
+                    originalCanvas.height = filteredCanvas.height = img.height;
+
+                    // 绘制原始图像
+                    const ctx = originalCanvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+
+                    // 保存图像数据
+                    originalImageData = ctx.getImageData(0, 0, img.width, img.height);
+                    currentImageData = ctx.getImageData(0, 0, img.width, img.height);
+
+                    // 显示编辑区
+                    uploadSection.classList.add('hidden');
+                    editorSection.classList.remove('hidden');
+
+                    // 在滤镜画布显示原图
+                    const filteredCtx = filteredCanvas.getContext('2d');
+                    filteredCtx.putImageData(currentImageData, 0, 0);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // 更新统计信息
+        function updateStats(duration, dataSize) {
+            document.getElementById('processingTime').textContent = duration + ' ms';
+            document.getElementById('dataSize').textContent = (dataSize / 1024).toFixed(2) + ' KB';
+            const throughputMBps = (dataSize / 1024 / 1024) / (duration / 1000);
+            document.getElementById('throughput').textContent = throughputMBps.toFixed(2) + ' MB/s';
+        }
+
+        // 反色滤镜
+        window.applyInvert = function() {
+            if (!originalImageData) return;
+
+            const startTime = performance.now();
+            const data = new Uint8Array(originalImageData.data);
+            const result = apply_invert(data);
+            const endTime = performance.now();
+
+            const duration = (endTime - startTime).toFixed(2);
+
+            currentImageData.data.set(result);
+            const filteredCanvas = document.getElementById('filteredCanvas');
+            const ctx = filteredCanvas.getContext('2d');
+            ctx.putImageData(currentImageData, 0, 0);
+
+            updateStats(duration, result.length);
+
+            // 重置亮度滑块
+            document.getElementById('brightnessSlider').value = 0;
+            document.getElementById('brightnessValue').textContent = '0';
+        };
+
+        // 灰度滤镜
+        window.applyGrayscale = function() {
+            if (!originalImageData) return;
+
+            const startTime = performance.now();
+            const data = new Uint8Array(originalImageData.data);
+            const result = apply_grayscale(data);
+            const endTime = performance.now();
+
+            const duration = (endTime - startTime).toFixed(2);
+
+            currentImageData.data.set(result);
+            const filteredCanvas = document.getElementById('filteredCanvas');
+            const ctx = filteredCanvas.getContext('2d');
+            ctx.putImageData(currentImageData, 0, 0);
+
+            updateStats(duration, result.length);
+
+            // 重置亮度滑块
+            document.getElementById('brightnessSlider').value = 0;
+            document.getElementById('brightnessValue').textContent = '0';
+        };
+
+        // 亮度滑块完全实时更新（零延迟，每一帧都执行）
+        document.getElementById('brightnessSlider').addEventListener('input', function(e) {
+            const value = e.target.value;
+            document.getElementById('brightnessValue').textContent = value;
+            
+            if (!originalImageData) return;
+            
+            const delta = parseInt(value);
+            const startTime = performance.now();
+            
+            // 从原始图像数据开始处理（而不是累积处理）
+            const data = new Uint8Array(originalImageData.data);
+            const result = apply_brightness(data, delta);
+            
+            const endTime = performance.now();
+            const duration = (endTime - startTime).toFixed(2);
+            
+            currentImageData.data.set(result);
+            const filteredCanvas = document.getElementById('filteredCanvas');
+            const ctx = filteredCanvas.getContext('2d');
+            ctx.putImageData(currentImageData, 0, 0);
+            
+            updateStats(duration, result.length);
+        });
+    </script>
+</body>
+</html>

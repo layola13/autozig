@@ -1,0 +1,23 @@
+# Rust 构建输出
+target/
+Cargo.lock
+
+# WASM 输出
+www/pkg/
+*.wasm
+*.js.map
+
+# 编辑器文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.temp

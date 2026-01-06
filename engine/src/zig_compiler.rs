@@ -43,7 +43,7 @@ impl ZigCompiler {
     /// # Arguments
     /// * `source` - Path to .zig source file
     /// * `output_lib` - Path for output static library (.a)
-    /// * `target` - Target triple (e.g., "x86_64-linux-gnu", "native")
+    /// * `target` - Target triple (e.g., "x86_64-linux-gnu", "native", "wasm32-freestanding")
     pub fn compile_with_target(
         &self,
         source: &Path,
@@ -65,27 +65,43 @@ impl ZigCompiler {
             }
         }
 
-        // zig build-lib source.zig -static -femit-bin=output.a -target <target> -fPIC
-        // -lc NOTE: We removed -femit-h because it's experimental and unstable
-        // FFI bindings will be generated directly from Rust signatures (IDL-driven)
-        // -fPIC is required for linking with PIE executables (Rust default)
-        // -lc is required for linking with libc (needed for c_allocator)
+        // 检测是否为 WASM 目标
+        let is_wasm = target.contains("wasm32");
+
+        // zig build-lib source.zig -static -femit-bin=output.a -target <target>
         let mut cmd = Command::new(&self.zig_path);
         cmd.arg("build-lib")
             .arg(source)
             .arg("-static")
             .arg(format!("-femit-bin={}", output_lib.display()))
             .arg("-target")
-            .arg(target)
-            // Generate Position Independent Code (required for PIE executables)
-            .arg("-fPIC")
-            // Link with libc (required for c_allocator and other libc functions)
-            .arg("-lc")
-            // Optimize for release builds
-            .arg("-O")
-            .arg("ReleaseFast");
+            .arg(target);
 
-        // 添加所有 C 源文件到编译命令
+        if is_wasm {
+            // WASM 特殊配置
+            println!("cargo:warning=Detected WASM target, applying WASM-specific flags");
+            
+            // WASM 不需要栈保护（没有 OS 支持）
+            cmd.arg("-fno-stack-protector");
+            
+            // WASM 优化：追求体积小
+            cmd.arg("-O").arg("ReleaseSmall");
+            
+            // 不链接 libc（freestanding 环境）
+            // WASM 环境下没有标准的 libc
+        } else {
+            // 非 WASM 目标的标准配置
+            // Generate Position Independent Code (required for PIE executables)
+            cmd.arg("-fPIC");
+            
+            // Link with libc (required for c_allocator and other libc functions)
+            cmd.arg("-lc");
+            
+            // Optimize for release builds
+            cmd.arg("-O").arg("ReleaseFast");
+        }
+
+        // 添加所有 C 源文件到编译命令（WASM 也支持 C 文件）
         for c_file in &c_sources {
             cmd.arg(c_file);
         }
@@ -108,7 +124,7 @@ impl ZigCompiler {
     /// # Arguments
     /// * `source` - Path to .zig source file (usually in OUT_DIR)
     /// * `output_lib` - Path for output static library (.a)
-    /// * `target` - Target triple (e.g., "x86_64-linux-gnu", "native")
+    /// * `target` - Target triple (e.g., "x86_64-linux-gnu", "native", "wasm32-freestanding")
     /// * `src_dir` - Original source directory to search for C files
     pub fn compile_with_target_and_src(
         &self,
@@ -132,17 +148,29 @@ impl ZigCompiler {
             }
         }
 
+        // 检测是否为 WASM 目标
+        let is_wasm = target.contains("wasm32");
+
         let mut cmd = Command::new(&self.zig_path);
         cmd.arg("build-lib")
             .arg(source)
             .arg("-static")
             .arg(format!("-femit-bin={}", output_lib.display()))
             .arg("-target")
-            .arg(target)
-            .arg("-fPIC")
-            .arg("-lc")
-            .arg("-O")
-            .arg("ReleaseFast");
+            .arg(target);
+
+        if is_wasm {
+            // WASM 特殊配置
+            cmd.arg("-fno-stack-protector")
+                .arg("-O")
+                .arg("ReleaseSmall");
+        } else {
+            // 非 WASM 目标的标准配置
+            cmd.arg("-fPIC")
+                .arg("-lc")
+                .arg("-O")
+                .arg("ReleaseFast");
+        }
 
         // 添加所有 C 源文件到编译命令
         for c_file in &c_sources {
