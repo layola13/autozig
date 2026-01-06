@@ -110,10 +110,10 @@ pub fn apply_brightness(mut data: Vec<u8>, delta: i32) -> Vec<u8> {
 #[wasm_bindgen]
 pub fn apply_invert_rust(mut data: Vec<u8>) -> Vec<u8> {
     for i in (0..data.len()).step_by(4) {
-        data[i] = 255 - data[i];         // R
+        data[i] = 255 - data[i]; // R
         data[i + 1] = 255 - data[i + 1]; // G
         data[i + 2] = 255 - data[i + 2]; // B
-        // data[i + 3] = Alpha (不变)
+                                         // data[i + 3] = Alpha (不变)
     }
     data
 }
@@ -125,10 +125,10 @@ pub fn apply_grayscale_rust(mut data: Vec<u8>) -> Vec<u8> {
         let r = data[i] as u32;
         let g = data[i + 1] as u32;
         let b = data[i + 2] as u32;
-        
+
         // 加权平均
         let gray = ((r * 299 + g * 587 + b * 114) / 1000) as u8;
-        
+
         data[i] = gray;
         data[i + 1] = gray;
         data[i + 2] = gray;
