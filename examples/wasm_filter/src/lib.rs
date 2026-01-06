@@ -9,20 +9,20 @@ use wasm_bindgen::prelude::*;
 autozig! {
     // 🚀 Zig SIMD 优化实现 - 使用 @Vector 进行真正的向量化
     // 配合 -mcpu=mvp+simd128 编译标志，将生成 v128.* 指令
-    
+
     // 🔥 反色滤镜 - SIMD 向量化版本
     // 一条 SIMD 指令处理 16 字节（比循环展开快 5-10 倍）
     export fn invert_colors_raw(ptr: [*]u8, len: usize) void {
         const vec_len = 16; // WASM SIMD128 标准宽度
         var i: usize = 0;
-        
+
         // 🎯 向量主循环：编译为 v128.load + v128.sub + v128.store
         while (i + vec_len <= len) : (i += vec_len) {
             const vec_ptr: *@Vector(vec_len, u8) = @ptrCast(@alignCast(ptr + i));
             const splat_255 = @as(@Vector(vec_len, u8), @splat(255));
             vec_ptr.* = splat_255 - vec_ptr.*;
         }
-        
+
         // 标量 fallback：处理尾部不足 16 字节的数据
         while (i < len) : (i += 1) {
             ptr[i] = 255 - ptr[i];
@@ -47,12 +47,12 @@ autozig! {
     export fn adjust_brightness_raw(ptr: [*]u8, len: usize, delta: i32) void {
         const vec_len = 16;
         var i: usize = 0;
-        
+
         if (delta >= 0) {
             // 增加亮度：SIMD 饱和加法
             const delta_u8 = @as(u8, @intCast(@min(delta, 255)));
             const delta_vec = @as(@Vector(vec_len, u8), @splat(delta_u8));
-            
+
             while (i + vec_len <= len) : (i += vec_len) {
                 const vec_ptr: *@Vector(vec_len, u8) = @ptrCast(@alignCast(ptr + i));
                 // 编译为 v128.add_sat_u (饱和加法，防止溢出)
@@ -62,14 +62,14 @@ autozig! {
             // 减少亮度：SIMD 饱和减法
             const delta_u8 = @as(u8, @intCast(@min(-delta, 255)));
             const delta_vec = @as(@Vector(vec_len, u8), @splat(delta_u8));
-            
+
             while (i + vec_len <= len) : (i += vec_len) {
                 const vec_ptr: *@Vector(vec_len, u8) = @ptrCast(@alignCast(ptr + i));
                 // 编译为 v128.sub_sat_u (饱和减法)
                 vec_ptr.* = vec_ptr.* -| delta_vec;
             }
         }
-        
+
         // 标量 fallback：处理尾部
         while (i < len) : (i += 1) {
             const result = @as(i32, ptr[i]) + delta;
