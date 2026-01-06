@@ -1,0 +1,665 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoZig WASM 多光源渲染</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            padding: 10px;
+            color: white;
+            overflow: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .comparison-table {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 10px 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            margin-bottom: 10px;
+        }
+
+        .comparison-table h3 {
+            text-align: center;
+            margin-bottom: 8px;
+            font-size: 1.1em;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+        }
+
+        th, td {
+            padding: 6px 8px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        th {
+            background: rgba(255, 255, 255, 0.2);
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .speedup {
+            font-weight: bold;
+            color: #4ade80;
+        }
+
+        .canvas-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 10px;
+            flex: 1;
+        }
+
+        .canvas-wrapper {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 10px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .canvas-wrapper h3 {
+            text-align: center;
+            margin-bottom: 8px;
+            font-size: 1.1em;
+        }
+
+        .canvas-wrapper canvas {
+            width: 100%;
+            border-radius: 8px;
+            background: black;
+            display: block;
+            flex: 1;
+        }
+
+        .perf-info {
+            text-align: center;
+            margin-top: 8px;
+            font-size: 0.8em;
+        }
+
+        .perf-time {
+            font-weight: bold;
+            color: #4ade80;
+        }
+
+        .perf-fps {
+            color: #fbbf24;
+        }
+
+        .controls {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 12px 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .control-group {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .control-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85em;
+        }
+
+        .control-item label {
+            min-width: 70px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .control-item input[type="range"] {
+            flex: 1;
+        }
+
+        .control-item .value {
+            min-width: 35px;
+            text-align: right;
+            font-weight: bold;
+            color: #fbbf24;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 8px 20px;
+            font-size: 0.9em;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f87171 0%, #dc2626 100%);
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="comparison-table">
+            <h3>📊 性能对比</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>实现</th>
+                        <th>渲染时间</th>
+                        <th>FPS</th>
+                        <th>吞吐量</th>
+                        <th>相对性能</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>⚡ Zig SIMD</strong></td>
+                        <td id="avgTimeZig">-</td>
+                        <td id="avgFpsZig">-</td>
+                        <td id="throughputZig">-</td>
+                        <td id="speedupZig">基准</td>
+                    </tr>
+                    <tr>
+                        <td><strong>🦀 Rust</strong></td>
+                        <td id="avgTimeRust">-</td>
+                        <td id="avgFpsRust">-</td>
+                        <td id="throughputRust">-</td>
+                        <td id="speedupRust">-</td>
+                    </tr>
+                    <tr>
+                        <td><strong>🟨 JS</strong></td>
+                        <td id="avgTimeJS">-</td>
+                        <td id="avgFpsJS">-</td>
+                        <td id="throughputJS">-</td>
+                        <td id="speedupJS">-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="canvas-grid">
+            <div class="canvas-wrapper">
+                <h3>⚡ Zig SIMD</h3>
+                <canvas id="canvasZig" width="350" height="350"></canvas>
+                <div class="perf-info">
+                    <div class="perf-time">时间: <span id="timeZig">-</span> ms</div>
+                    <div class="perf-fps">FPS: <span id="fpsZig">-</span></div>
+                </div>
+            </div>
+
+            <div class="canvas-wrapper">
+                <h3>🦀 Rust Scalar</h3>
+                <canvas id="canvasRust" width="350" height="350"></canvas>
+                <div class="perf-info">
+                    <div class="perf-time">时间: <span id="timeRust">-</span> ms</div>
+                    <div class="perf-fps">FPS: <span id="fpsRust">-</span></div>
+                </div>
+            </div>
+
+            <div class="canvas-wrapper">
+                <h3>🟨 JavaScript</h3>
+                <canvas id="canvasJS" width="350" height="350"></canvas>
+                <div class="perf-info">
+                    <div class="perf-time">时间: <span id="timeJS">-</span> ms</div>
+                    <div class="perf-fps">FPS: <span id="fpsJS">-</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <div class="control-item">
+                    <label>💡 光源:</label>
+                    <input type="range" id="numLights" min="1" max="20" value="5" step="1">
+                    <span class="value" id="numLightsValue">5</span>
+                </div>
+
+                <div class="control-item">
+                    <label>📏 半径:</label>
+                    <input type="range" id="lightRadius" min="50" max="300" value="150" step="10">
+                    <span class="value" id="lightRadiusValue">150</span>
+                </div>
+
+                <div class="control-item">
+                    <label>☀️ 强度:</label>
+                    <input type="range" id="lightIntensity" min="10" max="255" value="100" step="5">
+                    <span class="value" id="lightIntensityValue">100</span>
+                </div>
+
+                <div class="control-item">
+                    <label>🚀 速度:</label>
+                    <input type="range" id="animSpeed" min="0" max="5" value="1" step="0.1">
+                    <span class="value" id="animSpeedValue">1.0</span>
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button class="btn btn-success" id="btnStart">▶️ 开始</button>
+                <button class="btn btn-danger" id="btnStop">⏸️ 停止</button>
+                <button class="btn btn-primary" id="btnReset">🔄 重置</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import init, {
+            wasm_alloc_pixel_buffer,
+            wasm_alloc_lights_buffer,
+            wasm_alloc_background_buffer,
+            wasm_render_lights_scalar,
+            wasm_render_lights_simd,
+            get_version
+        } from './www/pkg/autozig_wasm_light.js';
+
+        // 初始化 WASM
+        const wasm = await init();
+        console.log('✅', get_version());
+
+        const WIDTH = 350;
+        const HEIGHT = 350;
+
+        // 加载底图 (logo.jpg)
+        const backgroundBufferPtr = wasm_alloc_background_buffer(WIDTH, HEIGHT);
+        const backgroundBufferLen = WIDTH * HEIGHT * 4;
+        const backgroundView = new Uint8Array(wasm.memory.buffer, backgroundBufferPtr, backgroundBufferLen);
+        
+        // 加载logo.jpg并写入底图缓冲区
+        const loadBackground = async () => {
+            try {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.src = './www/logo.jpg';
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = () => {
+                        console.warn('⚠️ logo.jpg 加载失败，使用默认渐变底图');
+                        resolve();
+                    };
+                });
+                
+                if (img.complete && img.naturalWidth > 0) {
+                    // 创建临时canvas缩放图片到350x350
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = WIDTH;
+                    tempCanvas.height = HEIGHT;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    tempCtx.drawImage(img, 0, 0, WIDTH, HEIGHT);
+                    
+                    // 读取像素数据并写入WASM底图缓冲区
+                    const imageData = tempCtx.getImageData(0, 0, WIDTH, HEIGHT);
+                    backgroundView.set(imageData.data);
+                    console.log('✅ 底图加载成功 (logo.jpg)');
+                } else {
+                    throw new Error('Image load failed');
+                }
+            } catch (e) {
+                // 使用默认渐变底图
+                for (let y = 0; y < HEIGHT; y++) {
+                    for (let x = 0; x < WIDTH; x++) {
+                        const idx = (y * WIDTH + x) * 4;
+                        backgroundView[idx + 0] = Math.floor((x / WIDTH) * 100 + 50); // R
+                        backgroundView[idx + 1] = Math.floor((y / HEIGHT) * 100 + 50); // G
+                        backgroundView[idx + 2] = 100; // B
+                        backgroundView[idx + 3] = 255; // A
+                    }
+                }
+                console.log('✅ 使用默认渐变底图');
+            }
+        };
+        
+        await loadBackground();
+
+        // 画布和上下文
+        const canvasZig = document.getElementById('canvasZig');
+        const canvasRust = document.getElementById('canvasRust');
+        const canvasJS = document.getElementById('canvasJS');
+
+        const ctxZig = canvasZig.getContext('2d');
+        const ctxRust = canvasRust.getContext('2d');
+        const ctxJS = canvasJS.getContext('2d');
+
+        // 分配零拷贝缓冲区
+        const pixelBufferPtr = wasm_alloc_pixel_buffer(WIDTH, HEIGHT);
+        const pixelBufferLen = WIDTH * HEIGHT * 4;
+        console.log(`📦 像素缓冲区: ${pixelBufferPtr}, 大小: ${pixelBufferLen} bytes`);
+
+        // 获取 WASM 内存视图（零拷贝）
+        const wasmMemory = wasm.memory;
+        const pixelView = new Uint8Array(wasmMemory.buffer, pixelBufferPtr, pixelBufferLen);
+
+        // 光源数据
+        let numLights = 5;
+        let lightsBufferPtr = wasm_alloc_lights_buffer(numLights);
+        let lights = [];
+
+        // 性能统计
+        const perfStats = {
+            zig: { times: [], fps: [] },
+            rust: { times: [], fps: [] },
+            js: { times: [], fps: [] }
+        };
+
+        let animationId = null;
+        let isRunning = false;
+        let animTime = 0;
+
+        // 初始化光源 - 使用固定颜色（红、黄、紫、橙、绿、青）
+        function initLights() {
+            lights = [];
+            const radius = parseFloat(document.getElementById('lightRadius').value);
+            const intensity = parseFloat(document.getElementById('lightIntensity').value);
+            numLights = parseInt(document.getElementById('numLights').value);
+
+            lightsBufferPtr = wasm_alloc_lights_buffer(numLights);
+
+            // 预定义的彩色光源（RGB值）
+            const lightColors = [
+                { r: 255, g: 50, b: 50 },    // 红色
+                { r: 255, g: 200, b: 50 },   // 黄色
+                { r: 200, g: 50, b: 255 },   // 紫色
+                { r: 255, g: 150, b: 50 },   // 橙色
+                { r: 50, g: 255, b: 100 },   // 绿色
+                { r: 50, g: 200, b: 255 },   // 青色
+                { r: 255, g: 100, b: 150 },  // 粉色
+                { r: 150, g: 255, b: 50 },   // 黄绿色
+                { r: 100, g: 150, b: 255 },  // 蓝紫色
+                { r: 255, g: 50, b: 150 },   // 玫红色
+            ];
+
+            for (let i = 0; i < numLights; i++) {
+                const angle = (i / numLights) * Math.PI * 2;
+                const color = lightColors[i % lightColors.length]; // 循环使用颜色
+                
+                lights.push({
+                    x: WIDTH / 2 + Math.cos(angle) * 80,
+                    y: HEIGHT / 2 + Math.sin(angle) * 80,
+                    z: 50,
+                    intensity: intensity,
+                    r: color.r,
+                    g: color.g,
+                    b: color.b,
+                    radius: radius,
+                    angle: angle,
+                    speed: Math.random() * 0.5 + 0.5
+                });
+            }
+
+            updateLightsBuffer();
+        }
+
+        // 更新光源缓冲区
+        function updateLightsBuffer() {
+            const lightView = new Float32Array(wasm.memory.buffer, lightsBufferPtr, numLights * 8);
+            for (let i = 0; i < numLights; i++) {
+                const light = lights[i];
+                const offset = i * 8;
+                lightView[offset + 0] = light.x;
+                lightView[offset + 1] = light.y;
+                lightView[offset + 2] = light.z;
+                lightView[offset + 3] = light.intensity;
+                lightView[offset + 4] = light.r;
+                lightView[offset + 5] = light.g;
+                lightView[offset + 6] = light.b;
+                lightView[offset + 7] = light.radius;
+            }
+        }
+
+        // 动画光源
+        function animateLights() {
+            const speed = parseFloat(document.getElementById('animSpeed').value);
+            animTime += 0.016 * speed;
+
+            for (let i = 0; i < lights.length; i++) {
+                const light = lights[i];
+                const t = animTime * light.speed;
+                light.x = WIDTH / 2 + Math.cos(light.angle + t) * 80;
+                light.y = HEIGHT / 2 + Math.sin(light.angle + t) * 80;
+                light.z = 50 + Math.sin(t * 2) * 30;
+            }
+
+            updateLightsBuffer();
+        }
+
+        // JavaScript 渲染实现（匹配light.zig算法：底图+平方衰减+环境光）
+        function renderJS() {
+            const imageData = ctxJS.createImageData(WIDTH, HEIGHT);
+            const data = imageData.data;
+            const ambient = 0.15; // 环境光强度15%
+
+            for (let y = 0; y < HEIGHT; y++) {
+                for (let x = 0; x < WIDTH; x++) {
+                    const idx = (y * WIDTH + x) * 4;
+                    
+                    // 读取底图颜色
+                    const bgIdx = (y * WIDTH + x) * 4;
+                    const base_r = backgroundView[bgIdx + 0];
+                    const base_g = backgroundView[bgIdx + 1];
+                    const base_b = backgroundView[bgIdx + 2];
+
+                    // 🔥 累积彩色光照（RGB独立）
+                    let light_r = 0.0;
+                    let light_g = 0.0;
+                    let light_b = 0.0;
+
+                    // 累积所有光源的彩色光照
+                    for (const light of lights) {
+                        const dx = x - light.x;
+                        const dy = y - light.y;
+                        const dz = 0 - light.z;
+                        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+                        if (dist < light.radius) {
+                            // 平方衰减光照模型
+                            const norm_dist = dist / light.radius;
+                            const falloff = (1.0 - norm_dist * norm_dist) * (light.intensity / 100.0);
+                            
+                            // 🔥 彩色光照贡献（每个RGB通道独立）
+                            light_r += light.r * falloff;
+                            light_g += light.g * falloff;
+                            light_b += light.b * falloff;
+                        }
+                    }
+
+                    // 环境光照亮底图 + 彩色光照混合
+                    const final_r = Math.min(255, base_r * ambient + light_r);
+                    const final_g = Math.min(255, base_g * ambient + light_g);
+                    const final_b = Math.min(255, base_b * ambient + light_b);
+
+                    data[idx + 0] = final_r;
+                    data[idx + 1] = final_g;
+                    data[idx + 2] = final_b;
+                    data[idx + 3] = 255;
+                }
+            }
+
+            ctxJS.putImageData(imageData, 0, 0);
+        }
+
+        // 更新性能统计
+        function updatePerfStats(impl, duration) {
+            const fps = 1000 / duration;
+            perfStats[impl].times.push(duration);
+            perfStats[impl].fps.push(fps);
+
+            if (perfStats[impl].times.length > 60) {
+                perfStats[impl].times.shift();
+                perfStats[impl].fps.shift();
+            }
+
+            const avgTime = perfStats[impl].times.reduce((a, b) => a + b, 0) / perfStats[impl].times.length;
+            const avgFps = perfStats[impl].fps.reduce((a, b) => a + b, 0) / perfStats[impl].fps.length;
+
+            // 映射表：impl名称 -> 元素ID后缀
+            const idMap = {
+                'zig': 'Zig',
+                'rust': 'Rust',
+                'js': 'JS'
+            };
+            const idSuffix = idMap[impl];
+
+            document.getElementById(`time${idSuffix}`).textContent = duration.toFixed(2);
+            document.getElementById(`fps${idSuffix}`).textContent = fps.toFixed(1);
+
+            document.getElementById(`avgTime${idSuffix}`).textContent = avgTime.toFixed(2) + ' ms';
+            document.getElementById(`avgFps${idSuffix}`).textContent = avgFps.toFixed(1);
+
+            const throughput = (pixelBufferLen / 1024 / 1024) / (avgTime / 1000);
+            document.getElementById(`throughput${idSuffix}`).textContent = throughput.toFixed(2) + ' MB/s';
+
+            // 计算相对性能
+            if (perfStats.zig.times.length > 0) {
+                const zigAvg = perfStats.zig.times.reduce((a, b) => a + b, 0) / perfStats.zig.times.length;
+                
+                if (impl === 'zig') {
+                    document.getElementById('speedupZig').textContent = '基准 (1.00x)';
+                } else {
+                    const avg = perfStats[impl].times.reduce((a, b) => a + b, 0) / perfStats[impl].times.length;
+                    const speedup = (avg / zigAvg).toFixed(2);
+                    document.getElementById(`speedup${idSuffix}`).innerHTML =
+                        `<span class="speedup">${speedup}x</span>`;
+                }
+            }
+        }
+
+        // 渲染循环
+        function renderFrame() {
+            if (!isRunning) return;
+
+            animateLights();
+
+            // Zig SIMD
+            let start = performance.now();
+            wasm_render_lights_simd(pixelBufferPtr, WIDTH, HEIGHT, lightsBufferPtr, numLights, backgroundBufferPtr);
+            const imageDataZig = new ImageData(new Uint8ClampedArray(pixelView), WIDTH, HEIGHT);
+            ctxZig.putImageData(imageDataZig, 0, 0);
+            let zigDuration = performance.now() - start;
+            updatePerfStats('zig', zigDuration);
+
+            // Rust Scalar
+            start = performance.now();
+            wasm_render_lights_scalar(pixelBufferPtr, WIDTH, HEIGHT, lightsBufferPtr, numLights, backgroundBufferPtr);
+            const imageDataRust = new ImageData(new Uint8ClampedArray(pixelView), WIDTH, HEIGHT);
+            ctxRust.putImageData(imageDataRust, 0, 0);
+            let rustDuration = performance.now() - start;
+            updatePerfStats('rust', rustDuration);
+
+            // JavaScript
+            start = performance.now();
+            renderJS();
+            let jsDuration = performance.now() - start;
+            updatePerfStats('js', jsDuration);
+
+            animationId = requestAnimationFrame(renderFrame);
+        }
+
+        // 事件监听
+        document.getElementById('btnStart').addEventListener('click', () => {
+            if (!isRunning) {
+                isRunning = true;
+                renderFrame();
+            }
+        });
+
+        document.getElementById('btnStop').addEventListener('click', () => {
+            isRunning = false;
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+        });
+
+        document.getElementById('btnReset').addEventListener('click', () => {
+            initLights();
+        });
+
+        // 滑块事件
+        document.getElementById('numLights').addEventListener('input', (e) => {
+            document.getElementById('numLightsValue').textContent = e.target.value;
+            initLights();
+        });
+
+        document.getElementById('lightRadius').addEventListener('input', (e) => {
+            document.getElementById('lightRadiusValue').textContent = e.target.value;
+            const radius = parseFloat(e.target.value);
+            lights.forEach(light => light.radius = radius);
+            updateLightsBuffer();
+        });
+
+        document.getElementById('lightIntensity').addEventListener('input', (e) => {
+            document.getElementById('lightIntensityValue').textContent = e.target.value;
+            const intensity = parseFloat(e.target.value);
+            lights.forEach(light => light.intensity = intensity);
+            updateLightsBuffer();
+        });
+
+        document.getElementById('animSpeed').addEventListener('input', (e) => {
+            document.getElementById('animSpeedValue').textContent = parseFloat(e.target.value).toFixed(1);
+        });
+
+        // 初始化
+        initLights();
+        console.log('✅ 紧凑版初始化完成，点击"开始"按钮查看效果');
+    </script>
+</body>
+</html>
