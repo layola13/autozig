@@ -335,6 +335,7 @@
         import init, {
             wasm_alloc_pixel_buffer,
             wasm_alloc_lights_buffer,
+            wasm_alloc_background_buffer,
             wasm_render_lights_scalar,
             wasm_render_lights_simd,
             get_version
@@ -343,6 +344,57 @@
         // 初始化 WASM
         const wasm = await init();
         console.log('✅', get_version());
+
+        // 加载底图 (logo.jpg)
+        const backgroundBufferPtr = wasm_alloc_background_buffer(400, 400);
+        const backgroundBufferLen = 400 * 400 * 4;
+        const backgroundView = new Uint8Array(wasm.memory.buffer, backgroundBufferPtr, backgroundBufferLen);
+        
+        // 加载logo.jpg并写入底图缓冲区
+        const loadBackground = async () => {
+            try {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.src = 'logo.jpg';
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = () => {
+                        console.warn('⚠️ logo.jpg 加载失败，使用默认渐变底图');
+                        resolve();
+                    };
+                });
+                
+                if (img.complete && img.naturalWidth > 0) {
+                    // 创建临时canvas缩放图片到400x400
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 400;
+                    tempCanvas.height = 400;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    tempCtx.drawImage(img, 0, 0, 400, 400);
+                    
+                    // 读取像素数据并写入WASM底图缓冲区
+                    const imageData = tempCtx.getImageData(0, 0, 400, 400);
+                    backgroundView.set(imageData.data);
+                    console.log('✅ 底图加载成功 (logo.jpg)');
+                } else {
+                    throw new Error('Image load failed');
+                }
+            } catch (e) {
+                // 使用默认渐变底图
+                for (let y = 0; y < 400; y++) {
+                    for (let x = 0; x < 400; x++) {
+                        const idx = (y * 400 + x) * 4;
+                        backgroundView[idx + 0] = Math.floor((x / 400) * 100 + 50); // R
+                        backgroundView[idx + 1] = Math.floor((y / 400) * 100 + 50); // G
+                        backgroundView[idx + 2] = 100; // B
+                        backgroundView[idx + 3] = 255; // A
+                    }
+                }
+                console.log('✅ 使用默认渐变底图');
+            }
+        };
+        
+        await loadBackground();
 
         // 画布和上下文
         const canvasZig = document.getElementById('canvasZig');
@@ -443,15 +495,26 @@
             updateLightsBuffer();
         }
 
-        // JavaScript 渲染实现
+        // JavaScript 渲染实现（匹配light.zig算法：底图+平方衰减+环境光）
         function renderJS() {
             const imageData = ctxJS.createImageData(WIDTH, HEIGHT);
             const data = imageData.data;
+            const ambient = 0.15; // 环境光强度15%
 
             for (let y = 0; y < HEIGHT; y++) {
                 for (let x = 0; x < WIDTH; x++) {
-                    let r = 0, g = 0, b = 0;
+                    const idx = (y * WIDTH + x) * 4;
+                    
+                    // 读取底图颜色
+                    const bgIdx = (y * WIDTH + x) * 4;
+                    const base_r = backgroundView[bgIdx + 0];
+                    const base_g = backgroundView[bgIdx + 1];
+                    const base_b = backgroundView[bgIdx + 2];
 
+                    // 初始化光照强度为环境光
+                    let light_intensity = ambient;
+
+                    // 累积所有光源的光照
                     for (const light of lights) {
                         const dx = x - light.x;
                         const dy = y - light.y;
@@ -459,19 +522,24 @@
                         const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
                         if (dist < light.radius) {
-                            const attenuation = 1.0 - (dist / light.radius);
-                            const factor = attenuation * attenuation * light.intensity;
-
-                            r += light.r * factor;
-                            g += light.g * factor;
-                            b += light.b * factor;
+                            // 平方衰减光照模型（匹配light.zig第163行）
+                            const norm_dist = dist / light.radius;
+                            const falloff = (1.0 - norm_dist * norm_dist) * (light.intensity / 100.0);
+                            light_intensity += falloff;
                         }
                     }
 
-                    const idx = (y * WIDTH + x) * 4;
-                    data[idx + 0] = Math.min(255, Math.max(0, r));
-                    data[idx + 1] = Math.min(255, Math.max(0, g));
-                    data[idx + 2] = Math.min(255, Math.max(0, b));
+                    // 限制光照强度到 [ambient, 1.5]（允许过曝效果）
+                    const clamped_intensity = Math.min(1.5, Math.max(ambient, light_intensity));
+
+                    // 应用光照到底图（相乘）
+                    const final_r = Math.min(255, base_r * clamped_intensity);
+                    const final_g = Math.min(255, base_g * clamped_intensity);
+                    const final_b = Math.min(255, base_b * clamped_intensity);
+
+                    data[idx + 0] = final_r;
+                    data[idx + 1] = final_g;
+                    data[idx + 2] = final_b;
                     data[idx + 3] = 255;
                 }
             }
@@ -533,7 +601,7 @@
 
             // Zig SIMD
             let start = performance.now();
-            wasm_render_lights_simd(pixelBufferPtr, WIDTH, HEIGHT, lightsBufferPtr, numLights);
+            wasm_render_lights_simd(pixelBufferPtr, WIDTH, HEIGHT, lightsBufferPtr, numLights, backgroundBufferPtr);
             const imageDataZig = new ImageData(new Uint8ClampedArray(pixelView), WIDTH, HEIGHT);
             ctxZig.putImageData(imageDataZig, 0, 0);
             let zigDuration = performance.now() - start;
@@ -541,7 +609,7 @@
 
             // Rust Scalar
             start = performance.now();
-            wasm_render_lights_scalar(pixelBufferPtr, WIDTH, HEIGHT, lightsBufferPtr, numLights);
+            wasm_render_lights_scalar(pixelBufferPtr, WIDTH, HEIGHT, lightsBufferPtr, numLights, backgroundBufferPtr);
             const imageDataRust = new ImageData(new Uint8ClampedArray(pixelView), WIDTH, HEIGHT);
             ctxRust.putImageData(imageDataRust, 0, 0);
             let rustDuration = performance.now() - start;

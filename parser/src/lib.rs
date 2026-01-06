@@ -313,7 +313,7 @@ fn parse_rust_definitions(
                             _ => "Other",
                         };
                         eprintln!("Parser: Processing item type: {}", item_type);
-                        
+
                         match inner_item {
                             syn::Item::Enum(item_enum) => {
                                 eprintln!("Parser:   -> Collecting Enum");
@@ -351,37 +351,44 @@ fn parse_rust_definitions(
                                 // Verbatim items are unparsed token streams
                                 // Try to parse as a function signature
                                 let tokens_str = tokens.to_string();
-                                
+
                                 // Normalize: replace newlines with spaces (same as line 227)
                                 let tokens_normalized = tokens_str.replace(['\n', '\r'], " ");
                                 let tokens_normalized = tokens_normalized
                                     .split_whitespace()
                                     .collect::<Vec<_>>()
                                     .join(" ");
-                                
+
                                 eprintln!("Parser:   Verbatim content: '{}'", tokens_str);
                                 eprintln!("Parser:   Normalized: '{}'", tokens_normalized);
-                                eprintln!("Parser:   Starts with 'fn ': {}", tokens_normalized.trim().starts_with("fn "));
-                                
+                                eprintln!(
+                                    "Parser:   Starts with 'fn ': {}",
+                                    tokens_normalized.trim().starts_with("fn ")
+                                );
+
                                 if tokens_normalized.trim().starts_with("fn ")
                                     || tokens_normalized.trim().starts_with("async fn ")
                                     || tokens_normalized.contains("fn ")
                                 {
-                                    // Try adding a body and parsing as ItemFn (use normalized version)
+                                    // Try adding a body and parsing as ItemFn (use normalized
+                                    // version)
                                     let fn_with_body = format!(
                                         "{} {{ unimplemented!() }}",
                                         tokens_normalized.trim_end_matches(';').trim()
                                     );
-                                    
+
                                     // Debug output
                                     eprintln!("Parser: Attempting to parse Verbatim function:");
                                     eprintln!("Parser:   Original: {}", tokens_str);
                                     eprintln!("Parser:   With body: {}", fn_with_body);
-                                    
+
                                     if let Ok(item_fn) =
                                         syn::parse_str::<syn::ItemFn>(&fn_with_body)
                                     {
-                                        eprintln!("Parser:   ✓ SUCCESS: Parsed as ItemFn: {}", item_fn.sig.ident);
+                                        eprintln!(
+                                            "Parser:   ✓ SUCCESS: Parsed as ItemFn: {}",
+                                            item_fn.sig.ident
+                                        );
                                         signatures.push(parse_function_signature(
                                             item_fn.sig,
                                             &item_fn.attrs,

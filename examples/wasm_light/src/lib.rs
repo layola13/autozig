@@ -9,9 +9,22 @@ use wasm_bindgen::prelude::*;
 // 参考 external 示例的格式：简洁的单行签名
 include_zig!("src/light.zig", {
     fn alloc_pixel_buffer(width: u32, height: u32) -> *mut u8;
+    fn alloc_background_buffer(width: u32, height: u32) -> *mut u8;
     fn alloc_lights_buffer(count: u32) -> *mut f32;
-    fn render_lights_simd_raw(pixel_ptr: *mut u8, width: u32, height: u32, lights_ptr: *const f32, num_lights: u32);
-    fn render_lights_scalar_raw(pixel_ptr: *mut u8, width: u32, height: u32, lights_ptr: *const f32, num_lights: u32);
+    fn render_lights_simd_raw(
+        pixel_ptr: *mut u8,
+        width: u32,
+        height: u32,
+        lights_ptr: *const f32,
+        num_lights: u32,
+    );
+    fn render_lights_scalar_raw(
+        pixel_ptr: *mut u8,
+        width: u32,
+        height: u32,
+        lights_ptr: *const f32,
+        num_lights: u32,
+    );
 });
 
 // ============================================================================
@@ -22,6 +35,12 @@ include_zig!("src/light.zig", {
 #[wasm_bindgen]
 pub fn wasm_alloc_pixel_buffer(width: u32, height: u32) -> *mut u8 {
     alloc_pixel_buffer(width, height)
+}
+
+/// 分配底图缓冲区（零拷贝）
+#[wasm_bindgen]
+pub fn wasm_alloc_background_buffer(width: u32, height: u32) -> *mut u8 {
+    alloc_background_buffer(width, height)
 }
 
 /// 分配光源缓冲区（零拷贝）
