@@ -1,5 +1,5 @@
 #!/bin/bash
-# AutoZig v0.1.1 发布脚本
+# AutoZig v0.1.2 发布脚本
 # 自动更新版本号并发布到 crates.io
 
 set -e  # 遇到错误立即退出
@@ -12,7 +12,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # 新版本号
-NEW_VERSION="0.1.1"
+NEW_VERSION="0.1.2"
 
 echo -e "${BLUE}======================================${NC}"
 echo -e "${BLUE}  AutoZig 发布脚本 v${NEW_VERSION}${NC}"
@@ -32,15 +32,15 @@ update_version() {
     local file=$1
     echo -e "${BLUE}📝 更新版本号: $file${NC}"
     
-    # 使用 sed 更新版本号
+    # 使用 sed 更新版本号（从 0.1.1 到新版本）
     if [[ "$OSTYPE" == "darwin"* ]]; then
         # macOS
-        sed -i '' "s/^version = \"0\.1\.0\"/version = \"$NEW_VERSION\"/" "$file"
-        sed -i '' "s/version = \"0\.1\.0\"/version = \"$NEW_VERSION\"/g" "$file"
+        sed -i '' "s/^version = \"0\.1\.1\"/version = \"$NEW_VERSION\"/" "$file"
+        sed -i '' "s/version = \"0\.1\.1\"/version = \"$NEW_VERSION\"/g" "$file"
     else
         # Linux
-        sed -i "s/^version = \"0\.1\.0\"/version = \"$NEW_VERSION\"/" "$file"
-        sed -i "s/version = \"0\.1\.0\"/version = \"$NEW_VERSION\"/g" "$file"
+        sed -i "s/^version = \"0\.1\.1\"/version = \"$NEW_VERSION\"/" "$file"
+        sed -i "s/version = \"0\.1\.1\"/version = \"$NEW_VERSION\"/g" "$file"
     fi
     
     echo -e "${GREEN}✓ 已更新${NC}"
