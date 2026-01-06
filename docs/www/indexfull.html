@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AutoZig WASM 多光源渲染</title>
+    <title>AutoZig WASM 多光源渲染 - 零拷贝 SIMD Demo</title>
     <style>
         * {
             margin: 0;
@@ -16,97 +15,63 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             min-height: 100vh;
-            padding: 10px;
+            padding: 20px;
             color: white;
-            overflow: hidden;
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
         }
 
-        .comparison-table {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            padding: 10px 15px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
             margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
         }
 
-        .comparison-table h3 {
-            text-align: center;
-            margin-bottom: 8px;
-            font-size: 1.1em;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.85em;
-        }
-
-        th, td {
-            padding: 6px 8px;
-            text-align: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        th {
-            background: rgba(255, 255, 255, 0.2);
-            font-weight: bold;
-            font-size: 0.9em;
-        }
-
-        tr:hover {
-            background: rgba(255, 255, 255, 0.05);
-        }
-
-        .speedup {
-            font-weight: bold;
-            color: #4ade80;
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
         }
 
         .canvas-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 15px;
-            margin-bottom: 10px;
-            flex: 1;
+            gap: 20px;
+            margin-bottom: 30px;
         }
 
         .canvas-wrapper {
             background: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            padding: 10px;
+            border-radius: 15px;
+            padding: 15px;
             backdrop-filter: blur(10px);
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-            display: flex;
-            flex-direction: column;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
         }
 
         .canvas-wrapper h3 {
             text-align: center;
-            margin-bottom: 8px;
-            font-size: 1.1em;
+            margin-bottom: 10px;
+            font-size: 1.3em;
         }
 
         .canvas-wrapper canvas {
             width: 100%;
-            border-radius: 8px;
+            border-radius: 10px;
             background: black;
             display: block;
-            flex: 1;
         }
 
         .perf-info {
             text-align: center;
-            margin-top: 8px;
-            font-size: 0.8em;
+            margin-top: 10px;
+            font-size: 0.9em;
         }
 
         .perf-time {
@@ -120,30 +85,35 @@
 
         .controls {
             background: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            padding: 12px 15px;
+            border-radius: 15px;
+            padding: 25px;
             backdrop-filter: blur(10px);
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            margin-bottom: 20px;
+        }
+
+        .controls h3 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 1.5em;
         }
 
         .control-group {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 12px;
-            margin-bottom: 10px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-bottom: 20px;
         }
 
         .control-item {
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 0.85em;
+            gap: 15px;
         }
 
         .control-item label {
-            min-width: 70px;
+            min-width: 140px;
             font-weight: bold;
-            font-size: 0.9em;
         }
 
         .control-item input[type="range"] {
@@ -151,7 +121,7 @@
         }
 
         .control-item .value {
-            min-width: 35px;
+            min-width: 50px;
             text-align: right;
             font-weight: bold;
             color: #fbbf24;
@@ -159,19 +129,20 @@
 
         .button-group {
             display: flex;
-            gap: 10px;
+            gap: 15px;
             justify-content: center;
+            flex-wrap: wrap;
         }
 
         .btn {
-            padding: 8px 20px;
-            font-size: 0.9em;
+            padding: 12px 30px;
+            font-size: 16px;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
             cursor: pointer;
             transition: all 0.3s;
             font-weight: bold;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
         }
 
         .btn-primary {
@@ -191,25 +162,145 @@
 
         .btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
         }
 
         .btn:active {
             transform: translateY(0);
         }
+
+        .comparison-table {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 25px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .comparison-table h3 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        th {
+            background: rgba(255, 255, 255, 0.2);
+            font-weight: bold;
+        }
+
+        tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .speedup {
+            font-weight: bold;
+            color: #4ade80;
+            font-size: 1.1em;
+        }
+
+        @media (max-width: 1200px) {
+            .canvas-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .control-group {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
+        <div class="header">
+            <h1>🚀 AutoZig WASM 多光源渲染</h1>
+            <p>零拷贝内存共享 + Zig SIMD f32x4 光照计算</p>
+        </div>
+
+        <div class="canvas-grid">
+            <div class="canvas-wrapper">
+                <h3>⚡ Zig SIMD</h3>
+                <canvas id="canvasZig" width="400" height="400"></canvas>
+                <div class="perf-info">
+                    <div class="perf-time">时间: <span id="timeZig">-</span> ms</div>
+                    <div class="perf-fps">FPS: <span id="fpsZig">-</span></div>
+                </div>
+            </div>
+
+            <div class="canvas-wrapper">
+                <h3>🦀 Rust Scalar</h3>
+                <canvas id="canvasRust" width="400" height="400"></canvas>
+                <div class="perf-info">
+                    <div class="perf-time">时间: <span id="timeRust">-</span> ms</div>
+                    <div class="perf-fps">FPS: <span id="fpsRust">-</span></div>
+                </div>
+            </div>
+
+            <div class="canvas-wrapper">
+                <h3>🟨 JavaScript</h3>
+                <canvas id="canvasJS" width="400" height="400"></canvas>
+                <div class="perf-info">
+                    <div class="perf-time">时间: <span id="timeJS">-</span> ms</div>
+                    <div class="perf-fps">FPS: <span id="fpsJS">-</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <h3>🎛️ 光源控制</h3>
+            
+            <div class="control-group">
+                <div class="control-item">
+                    <label>💡 光源数量:</label>
+                    <input type="range" id="numLights" min="1" max="20" value="5" step="1">
+                    <span class="value" id="numLightsValue">5</span>
+                </div>
+
+                <div class="control-item">
+                    <label>📏 光源半径:</label>
+                    <input type="range" id="lightRadius" min="50" max="300" value="150" step="10">
+                    <span class="value" id="lightRadiusValue">150</span>
+                </div>
+
+                <div class="control-item">
+                    <label>☀️ 光源强度:</label>
+                    <input type="range" id="lightIntensity" min="10" max="255" value="100" step="5">
+                    <span class="value" id="lightIntensityValue">100</span>
+                </div>
+
+                <div class="control-item">
+                    <label>🚀 动画速度:</label>
+                    <input type="range" id="animSpeed" min="0" max="5" value="1" step="0.1">
+                    <span class="value" id="animSpeedValue">1.0</span>
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button class="btn btn-success" id="btnStart">▶️ 开始渲染</button>
+                <button class="btn btn-danger" id="btnStop">⏸️ 停止</button>
+                <button class="btn btn-primary" id="btnReset">🔄 重置光源</button>
+            </div>
+        </div>
+
         <div class="comparison-table">
-            <h3>📊 性能对比</h3>
+            <h3>📊 性能对比统计</h3>
             <table>
                 <thead>
                     <tr>
-                        <th>实现</th>
-                        <th>渲染时间</th>
-                        <th>FPS</th>
-                        <th>吞吐量</th>
+                        <th>实现方式</th>
+                        <th>平均渲染时间</th>
+                        <th>平均 FPS</th>
+                        <th>吞吐量 (MB/s)</th>
                         <th>相对性能</th>
                     </tr>
                 </thead>
@@ -222,14 +313,14 @@
                         <td id="speedupZig">基准</td>
                     </tr>
                     <tr>
-                        <td><strong>🦀 Rust</strong></td>
+                        <td><strong>🦀 Rust Scalar</strong></td>
                         <td id="avgTimeRust">-</td>
                         <td id="avgFpsRust">-</td>
                         <td id="throughputRust">-</td>
                         <td id="speedupRust">-</td>
                     </tr>
                     <tr>
-                        <td><strong>🟨 JS</strong></td>
+                        <td><strong>🟨 JavaScript</strong></td>
                         <td id="avgTimeJS">-</td>
                         <td id="avgFpsJS">-</td>
                         <td id="throughputJS">-</td>
@@ -237,69 +328,6 @@
                     </tr>
                 </tbody>
             </table>
-        </div>
-
-        <div class="canvas-grid">
-            <div class="canvas-wrapper">
-                <h3>⚡ Zig SIMD</h3>
-                <canvas id="canvasZig" width="350" height="350"></canvas>
-                <div class="perf-info">
-                    <div class="perf-time">时间: <span id="timeZig">-</span> ms</div>
-                    <div class="perf-fps">FPS: <span id="fpsZig">-</span></div>
-                </div>
-            </div>
-
-            <div class="canvas-wrapper">
-                <h3>🦀 Rust Scalar</h3>
-                <canvas id="canvasRust" width="350" height="350"></canvas>
-                <div class="perf-info">
-                    <div class="perf-time">时间: <span id="timeRust">-</span> ms</div>
-                    <div class="perf-fps">FPS: <span id="fpsRust">-</span></div>
-                </div>
-            </div>
-
-            <div class="canvas-wrapper">
-                <h3>🟨 JavaScript</h3>
-                <canvas id="canvasJS" width="350" height="350"></canvas>
-                <div class="perf-info">
-                    <div class="perf-time">时间: <span id="timeJS">-</span> ms</div>
-                    <div class="perf-fps">FPS: <span id="fpsJS">-</span></div>
-                </div>
-            </div>
-        </div>
-
-        <div class="controls">
-            <div class="control-group">
-                <div class="control-item">
-                    <label>💡 光源:</label>
-                    <input type="range" id="numLights" min="1" max="20" value="5" step="1">
-                    <span class="value" id="numLightsValue">5</span>
-                </div>
-
-                <div class="control-item">
-                    <label>📏 半径:</label>
-                    <input type="range" id="lightRadius" min="50" max="300" value="150" step="10">
-                    <span class="value" id="lightRadiusValue">150</span>
-                </div>
-
-                <div class="control-item">
-                    <label>☀️ 强度:</label>
-                    <input type="range" id="lightIntensity" min="10" max="255" value="100" step="5">
-                    <span class="value" id="lightIntensityValue">100</span>
-                </div>
-
-                <div class="control-item">
-                    <label>🚀 速度:</label>
-                    <input type="range" id="animSpeed" min="0" max="5" value="1" step="0.1">
-                    <span class="value" id="animSpeedValue">1.0</span>
-                </div>
-            </div>
-
-            <div class="button-group">
-                <button class="btn btn-success" id="btnStart">▶️ 开始</button>
-                <button class="btn btn-danger" id="btnStop">⏸️ 停止</button>
-                <button class="btn btn-primary" id="btnReset">🔄 重置</button>
-            </div>
         </div>
     </div>
 
@@ -317,12 +345,9 @@
         const wasm = await init();
         console.log('✅', get_version());
 
-        const WIDTH = 350;
-        const HEIGHT = 350;
-
         // 加载底图 (logo.jpg)
-        const backgroundBufferPtr = wasm_alloc_background_buffer(WIDTH, HEIGHT);
-        const backgroundBufferLen = WIDTH * HEIGHT * 4;
+        const backgroundBufferPtr = wasm_alloc_background_buffer(400, 400);
+        const backgroundBufferLen = 400 * 400 * 4;
         const backgroundView = new Uint8Array(wasm.memory.buffer, backgroundBufferPtr, backgroundBufferLen);
         
         // 加载logo.jpg并写入底图缓冲区
@@ -340,15 +365,15 @@
                 });
                 
                 if (img.complete && img.naturalWidth > 0) {
-                    // 创建临时canvas缩放图片到350x350
+                    // 创建临时canvas缩放图片到400x400
                     const tempCanvas = document.createElement('canvas');
-                    tempCanvas.width = WIDTH;
-                    tempCanvas.height = HEIGHT;
+                    tempCanvas.width = 400;
+                    tempCanvas.height = 400;
                     const tempCtx = tempCanvas.getContext('2d');
-                    tempCtx.drawImage(img, 0, 0, WIDTH, HEIGHT);
+                    tempCtx.drawImage(img, 0, 0, 400, 400);
                     
                     // 读取像素数据并写入WASM底图缓冲区
-                    const imageData = tempCtx.getImageData(0, 0, WIDTH, HEIGHT);
+                    const imageData = tempCtx.getImageData(0, 0, 400, 400);
                     backgroundView.set(imageData.data);
                     console.log('✅ 底图加载成功 (logo.jpg)');
                 } else {
@@ -356,11 +381,11 @@
                 }
             } catch (e) {
                 // 使用默认渐变底图
-                for (let y = 0; y < HEIGHT; y++) {
-                    for (let x = 0; x < WIDTH; x++) {
-                        const idx = (y * WIDTH + x) * 4;
-                        backgroundView[idx + 0] = Math.floor((x / WIDTH) * 100 + 50); // R
-                        backgroundView[idx + 1] = Math.floor((y / HEIGHT) * 100 + 50); // G
+                for (let y = 0; y < 400; y++) {
+                    for (let x = 0; x < 400; x++) {
+                        const idx = (y * 400 + x) * 4;
+                        backgroundView[idx + 0] = Math.floor((x / 400) * 100 + 50); // R
+                        backgroundView[idx + 1] = Math.floor((y / 400) * 100 + 50); // G
                         backgroundView[idx + 2] = 100; // B
                         backgroundView[idx + 3] = 255; // A
                     }
@@ -380,12 +405,16 @@
         const ctxRust = canvasRust.getContext('2d');
         const ctxJS = canvasJS.getContext('2d');
 
+        const WIDTH = 400;
+        const HEIGHT = 400;
+
         // 分配零拷贝缓冲区
         const pixelBufferPtr = wasm_alloc_pixel_buffer(WIDTH, HEIGHT);
         const pixelBufferLen = WIDTH * HEIGHT * 4;
         console.log(`📦 像素缓冲区: ${pixelBufferPtr}, 大小: ${pixelBufferLen} bytes`);
 
         // 获取 WASM 内存视图（零拷贝）
+        // 注意：wasm.memory 是 WebAssembly.Memory 对象
         const wasmMemory = wasm.memory;
         const pixelView = new Uint8Array(wasmMemory.buffer, pixelBufferPtr, pixelBufferLen);
 
@@ -433,8 +462,8 @@
                 const color = lightColors[i % lightColors.length]; // 循环使用颜色
                 
                 lights.push({
-                    x: WIDTH / 2 + Math.cos(angle) * 80,
-                    y: HEIGHT / 2 + Math.sin(angle) * 80,
+                    x: WIDTH / 2 + Math.cos(angle) * 100,
+                    y: HEIGHT / 2 + Math.sin(angle) * 100,
                     z: 50,
                     intensity: intensity,
                     r: color.r,
@@ -474,8 +503,8 @@
             for (let i = 0; i < lights.length; i++) {
                 const light = lights[i];
                 const t = animTime * light.speed;
-                light.x = WIDTH / 2 + Math.cos(light.angle + t) * 80;
-                light.y = HEIGHT / 2 + Math.sin(light.angle + t) * 80;
+                light.x = WIDTH / 2 + Math.cos(light.angle + t) * 100;
+                light.y = HEIGHT / 2 + Math.sin(light.angle + t) * 100;
                 light.z = 50 + Math.sin(t * 2) * 30;
             }
 
@@ -555,7 +584,7 @@
             const idMap = {
                 'zig': 'Zig',
                 'rust': 'Rust',
-                'js': 'JS'
+                'js': 'JS'  // 注意：JS是全大写
             };
             const idSuffix = idMap[impl];
 
@@ -659,7 +688,7 @@
 
         // 初始化
         initLights();
-        console.log('✅ 紧凑版初始化完成，点击"开始"按钮查看效果');
+        console.log('✅ 初始化完成，点击"开始渲染"按钮查看效果');
     </script>
 </body>
 </html>

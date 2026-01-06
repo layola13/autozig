@@ -1,0 +1,15 @@
+{
+  "name": "autozig-wasm-light",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "autozig_wasm_light_bg.wasm",
+    "autozig_wasm_light.js",
+    "autozig_wasm_light.d.ts"
+  ],
+  "main": "autozig_wasm_light.js",
+  "types": "autozig_wasm_light.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
