@@ -215,7 +215,7 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td><strong>⚡ Zig SIMD</strong></td>
+                        <td><strong>⚡ AutoZig</strong></td>
                         <td id="avgTimeZig">-</td>
                         <td id="avgFpsZig">-</td>
                         <td id="throughputZig">-</td>
@@ -241,7 +241,7 @@
 
         <div class="canvas-grid">
             <div class="canvas-wrapper">
-                <h3>⚡ Zig SIMD</h3>
+                <h3>⚡ AutoZig</h3>
                 <canvas id="canvasZig" width="350" height="350"></canvas>
                 <div class="perf-info">
                     <div class="perf-time">时间: <span id="timeZig">-</span> ms</div>
@@ -589,7 +589,7 @@
 
             animateLights();
 
-            // Zig SIMD
+            // AutoZig
             let start = performance.now();
             wasm_render_lights_simd(pixelBufferPtr, WIDTH, HEIGHT, lightsBufferPtr, numLights, backgroundBufferPtr);
             const imageDataZig = new ImageData(new Uint8ClampedArray(pixelView), WIDTH, HEIGHT);
