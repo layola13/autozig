@@ -47,7 +47,8 @@ members = [
     "examples/stream_basic",
     "examples/simd_detect",
     "examples/zero_copy",
-    "examples/wasm_filter"
+    "examples/wasm_filter",
+    "examples/wasm_light"
 ]
 
 [features]

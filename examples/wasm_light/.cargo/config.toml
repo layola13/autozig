@@ -1,0 +1,8 @@
+[build]
+target = "wasm32-unknown-unknown"
+
+[target.wasm32-unknown-unknown]
+rustflags = [
+    "-C", "target-feature=+simd128",  # 启用 WASM SIMD128
+    "-C", "opt-level=3",               # 最大优化
+]
