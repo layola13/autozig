@@ -108,8 +108,13 @@ echo -e "${YELLOW}📝 提交版本更新到 Git...${NC}"
 git add Cargo.toml parser/Cargo.toml engine/Cargo.toml macro/Cargo.toml
 # 强制添加 gen/build/Cargo.toml（即使在 .gitignore 中）
 git add -f gen/build/Cargo.toml
-git commit -m "chore: bump version to ${NEW_VERSION}"
-echo -e "${GREEN}✓ 已提交${NC}"
+# 检查是否有改动需要提交
+if git diff --cached --quiet; then
+    echo -e "${YELLOW}⚠️  版本号已是最新，无需提交${NC}"
+else
+    git commit -m "chore: bump version to ${NEW_VERSION}"
+    echo -e "${GREEN}✓ 已提交${NC}"
+fi
 
 # 运行测试
 echo -e "\n${BLUE}======================================${NC}"
