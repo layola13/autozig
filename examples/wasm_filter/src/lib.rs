@@ -1,15 +1,15 @@
 //! AutoZig WASM 图像滤镜示例
-//! 
+//!
 //! 演示如何使用 AutoZig 在 WASM 环境中调用 Zig 代码进行高性能图像处理
 
-use wasm_bindgen::prelude::*;
 use autozig::autozig;
+use wasm_bindgen::prelude::*;
 
 // 使用 autozig! 宏嵌入 Zig 代码
 autozig! {
     // Zig 实现：图像反色滤镜
     // 这段代码会被编译为 WASM 并与 Rust 静态链接
-    
+
     // 反色滤镜 (Invert Colors)
     // 对 RGBA 图像数据进行反色处理
     export fn invert_colors_raw(ptr: [*]u8, len: usize) void {
@@ -22,7 +22,7 @@ autozig! {
             // ptr[i + 3] = Alpha (不变)
         }
     }
-    
+
     // 灰度滤镜 (Grayscale)
     // 使用标准加权平均法：Gray = 0.299*R + 0.587*G + 0.114*B
     export fn grayscale_raw(ptr: [*]u8, len: usize) void {
@@ -31,21 +31,21 @@ autozig! {
             const r = ptr[i];
             const g = ptr[i + 1];
             const b = ptr[i + 2];
-            
+
             // 加权平均（使用整数运算避免浮点）
             const gray = @as(u8, @intCast((
                 @as(u32, r) * 299 +
                 @as(u32, g) * 587 +
                 @as(u32, b) * 114
             ) / 1000));
-            
+
             ptr[i] = gray;
             ptr[i + 1] = gray;
             ptr[i + 2] = gray;
             // Alpha 不变
         }
     }
-    
+
     // 亮度调整 (Brightness)
     // delta: 亮度调整值 (-255 到 +255)
     export fn adjust_brightness_raw(ptr: [*]u8, len: usize, delta: i32) void {
@@ -58,7 +58,7 @@ autozig! {
             // Alpha 不变
         }
     }
-    
+
     // 辅助函数：带范围限制的加法
     fn clamp_add(value: u8, delta: i32) u8 {
         const result = @as(i32, value) + delta;
@@ -66,9 +66,9 @@ autozig! {
         if (result > 255) return 255;
         return @as(u8, @intCast(result));
     }
-    
+
     ---
-    
+
     // Rust FFI 签名声明
     // AutoZig 会自动生成 Rust 包装函数
     // 注意：对于带额外参数的函数，需要直接声明原始指针形式
