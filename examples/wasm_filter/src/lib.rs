@@ -102,6 +102,57 @@ pub fn apply_brightness(mut data: Vec<u8>, delta: i32) -> Vec<u8> {
     data
 }
 
+// ============================================================================
+// Rust Native 实现（用于性能对比）
+// ============================================================================
+
+/// Rust Native: 反色滤镜
+#[wasm_bindgen]
+pub fn apply_invert_rust(mut data: Vec<u8>) -> Vec<u8> {
+    for i in (0..data.len()).step_by(4) {
+        data[i] = 255 - data[i];         // R
+        data[i + 1] = 255 - data[i + 1]; // G
+        data[i + 2] = 255 - data[i + 2]; // B
+        // data[i + 3] = Alpha (不变)
+    }
+    data
+}
+
+/// Rust Native: 灰度滤镜
+#[wasm_bindgen]
+pub fn apply_grayscale_rust(mut data: Vec<u8>) -> Vec<u8> {
+    for i in (0..data.len()).step_by(4) {
+        let r = data[i] as u32;
+        let g = data[i + 1] as u32;
+        let b = data[i + 2] as u32;
+        
+        // 加权平均
+        let gray = ((r * 299 + g * 587 + b * 114) / 1000) as u8;
+        
+        data[i] = gray;
+        data[i + 1] = gray;
+        data[i + 2] = gray;
+    }
+    data
+}
+
+/// Rust Native: 亮度调整
+#[wasm_bindgen]
+pub fn apply_brightness_rust(mut data: Vec<u8>, delta: i32) -> Vec<u8> {
+    for i in (0..data.len()).step_by(4) {
+        data[i] = clamp_add_rust(data[i], delta);
+        data[i + 1] = clamp_add_rust(data[i + 1], delta);
+        data[i + 2] = clamp_add_rust(data[i + 2], delta);
+    }
+    data
+}
+
+/// Rust辅助函数：带范围限制的加法
+fn clamp_add_rust(value: u8, delta: i32) -> u8 {
+    let result = value as i32 + delta;
+    result.clamp(0, 255) as u8
+}
+
 /// 获取版本信息
 #[wasm_bindgen]
 pub fn get_version() -> String {
