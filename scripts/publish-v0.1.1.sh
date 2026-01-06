@@ -104,7 +104,10 @@ echo -e "${BLUE}======================================${NC}\n"
 
 cd "$AUTOZIG_ROOT"
 echo -e "${YELLOW}📝 提交版本更新到 Git...${NC}"
-git add Cargo.toml parser/Cargo.toml engine/Cargo.toml macro/Cargo.toml gen/build/Cargo.toml
+# 只提交主要的4个 Cargo.toml，gen/build 在 .gitignore 中
+git add Cargo.toml parser/Cargo.toml engine/Cargo.toml macro/Cargo.toml
+# 强制添加 gen/build/Cargo.toml（即使在 .gitignore 中）
+git add -f gen/build/Cargo.toml
 git commit -m "chore: bump version to ${NEW_VERSION}"
 echo -e "${GREEN}✓ 已提交${NC}"
 
