@@ -85,8 +85,13 @@ impl ZigCompiler {
             // WASM 不需要栈保护（没有 OS 支持）
             cmd.arg("-fno-stack-protector");
 
-            // WASM 优化：追求体积小
-            cmd.arg("-O").arg("ReleaseSmall");
+            // 🚀 启用 WASM SIMD128 支持（关键性能优化！）
+            // 这将允许使用 v128.load, v128.sub, v128.store 等 SIMD 指令
+            cmd.arg("-mcpu=mvp+simd128");
+
+            // WASM 优化：改用 ReleaseFast 以获得最佳性能
+            // (ReleaseSmall 会禁用某些 SIMD 优化)
+            cmd.arg("-O").arg("ReleaseFast");
 
             // 不链接 libc（freestanding 环境）
             // WASM 环境下没有标准的 libc
@@ -164,8 +169,10 @@ impl ZigCompiler {
         if is_wasm {
             // WASM 特殊配置
             cmd.arg("-fno-stack-protector")
+                // 🚀 启用 WASM SIMD128 支持
+                .arg("-mcpu=mvp+simd128")
                 .arg("-O")
-                .arg("ReleaseSmall");
+                .arg("ReleaseFast");
         } else {
             // 非 WASM 目标的标准配置
             cmd.arg("-fPIC").arg("-lc").arg("-O").arg("ReleaseFast");

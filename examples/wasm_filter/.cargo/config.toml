@@ -1,0 +1,11 @@
+# Cargo 配置文件
+# 为 WASM 目标启用 SIMD128 特性
+
+[target.wasm32-unknown-unknown]
+# 启用 WASM SIMD128 指令集
+# 这将允许 Rust 编译器生成 v128.* 指令，与 Zig 的 SIMD 优化对标
+rustflags = ["-C", "target-feature=+simd128"]
+
+# 注意：
+# - 需要支持 SIMD128 的浏览器（Chrome 91+, Firefox 89+, Safari 16.4+）
+# - 如果需要兼容旧浏览器，请移除此配置
