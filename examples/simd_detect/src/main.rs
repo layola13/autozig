@@ -40,9 +40,10 @@ fn main() {
 
 fn display_compile_info() {
     println!("Compile-Time Configuration:");
-    println!("  Architecture: {}", env!("AUTOZIG_SIMD_ARCH"));
-    println!("  SIMD Level:   {}", env!("AUTOZIG_SIMD_CONFIG"));
-    println!("  Zig CPU Flag: {}\n", env!("AUTOZIG_ZIG_CPU_FLAG"));
+    // Use option_env! to gracefully handle missing environment variables
+    println!("  Architecture: {}", option_env!("AUTOZIG_SIMD_ARCH").unwrap_or("Not detected (rebuild required)"));
+    println!("  SIMD Level:   {}", option_env!("AUTOZIG_SIMD_CONFIG").unwrap_or("Not detected (rebuild required)"));
+    println!("  Zig CPU Flag: {}\n", option_env!("AUTOZIG_ZIG_CPU_FLAG").unwrap_or("Not detected (rebuild required)"));
 }
 
 fn display_runtime_features() {

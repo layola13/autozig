@@ -9,7 +9,7 @@
 
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
 [![Rust](https://img.shields.io/badge/rust-1.77%2B-orange.svg)](https://www.rust-lang.org/)
-[![Zig](https://img.shields.io/badge/zig-0.11%2B-f7a41d.svg)](https://ziglang.org/)
+[![Zig](https://img.shields.io/badge/zig-0.15%2B-f7a41d.svg)](https://ziglang.org/)
 [![CI](https://img.shields.io/badge/CI-passing-brightgreen.svg)](.github/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-39%20passing-success.svg)](.)
 
@@ -683,7 +683,7 @@ autozig/
 Component | Version | Notes |
 |-----------|---------|-------|
 | **Rust** | 1.77+ | Workspace features required |
-| **Zig** | 0.11+ or 0.12+ | Must be in PATH |
+| **Zig** | 0.15+ | Must be in PATH |
 | **Tokio** | 1.0+ | Required for async examples |
 
 ---

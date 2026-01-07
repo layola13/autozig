@@ -57,7 +57,10 @@ echo -e "${GREEN}✅ Doc tests passed${NC}"
 # Check 6: Examples verification (optional, can be slow)
 if [ "$SKIP_EXAMPLES" != "1" ]; then
     echo -e "\n${YELLOW}🎯 Verifying examples...${NC}"
-    if ! (cd examples && timeout 300 ./verify_all.sh 2>&1 | tail -15); then
+    echo -e "${YELLOW}🧹 Cleaning build cache...${NC}"
+    cargo clean
+    # Set CI mode to use default options automatically
+    if ! (cd examples && CI=1 timeout 300 ./verify_all.sh 2>&1 | tail -15); then
         echo -e "${RED}❌ Examples verification failed!${NC}"
         echo -e "${YELLOW}💡 Set SKIP_EXAMPLES=1 to skip this check${NC}"
         exit 1
