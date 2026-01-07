@@ -38,10 +38,11 @@ if ! cargo build --all 2>&1; then
 fi
 echo -e "${GREEN}✅ Build successful${NC}"
 
-# Check 4: Tests
-echo -e "\n${YELLOW}🧪 Running tests...${NC}"
-if ! cargo test --all 2>&1 | tail -20; then
+# Check 4: Tests (verbose mode for detailed output)
+echo -e "\n${YELLOW}🧪 Running tests (verbose)...${NC}"
+if ! cargo test --all --verbose 2>&1 | tail -30; then
     echo -e "${RED}❌ Tests failed!${NC}"
+    echo -e "${YELLOW}💡 Run 'cargo test --all --verbose' to see full output${NC}"
     exit 1
 fi
 echo -e "${GREEN}✅ All tests passed${NC}"

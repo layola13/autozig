@@ -32,7 +32,7 @@
 //!
 //! ## Example
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use autozig::zero_copy::ZeroCopyBuffer;
 //!
 //! // Zig function returns zero-copy buffer

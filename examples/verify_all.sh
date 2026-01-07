@@ -344,71 +344,81 @@ main() {
     echo -e "      ${GREEN}export AUTOZIG_MODE=modular_buildzig${NC}"
     echo ""
     
-    # 询问用户选择编译优化模式
-    echo -e "${CYAN}================================================${NC}"
-    echo -e "${CYAN}  选择编译优化模式${NC}"
-    echo -e "${CYAN}================================================${NC}"
-    echo -e "${YELLOW}1.${NC} Debug (调试模式) ${GREEN}[默认]${NC}"
-    echo -e "   └─ 编译速度: ${GREEN}快${NC}"
-    echo -e "   └─ 运行速度: 慢"
-    echo -e "   └─ 适合: 快速验证、调试错误"
-    echo ""
-    echo -e "${YELLOW}2.${NC} Release (发布模式)"
-    echo -e "   └─ 编译速度: ${RED}慢${NC} (需要优化)"
-    echo -e "   └─ 运行速度: ${GREEN}快${NC}"
-    echo -e "   └─ 适合: 性能测试、生产环境"
-    echo ""
-    echo -e -n "${BLUE}请输入选项 (1-2) [默认: 1]:${NC} "
-    read -r build_choice
+    # 询问用户选择编译优化模式（仅非CI环境）
+    if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ] || [ ! -t 0 ]; then
+        # CI环境：使用默认值
+        log_info "CI环境：使用默认构建模式 (BUILD_MODE=$BUILD_MODE)"
+    else
+        echo -e "${CYAN}================================================${NC}"
+        echo -e "${CYAN}  选择编译优化模式${NC}"
+        echo -e "${CYAN}================================================${NC}"
+        echo -e "${YELLOW}1.${NC} Debug (调试模式) ${GREEN}[默认]${NC}"
+        echo -e "   └─ 编译速度: ${GREEN}快${NC}"
+        echo -e "   └─ 运行速度: 慢"
+        echo -e "   └─ 适合: 快速验证、调试错误"
+        echo ""
+        echo -e "${YELLOW}2.${NC} Release (发布模式)"
+        echo -e "   └─ 编译速度: ${RED}慢${NC} (需要优化)"
+        echo -e "   └─ 运行速度: ${GREEN}快${NC}"
+        echo -e "   └─ 适合: 性能测试、生产环境"
+        echo ""
+        echo -e -n "${BLUE}请输入选项 (1-2) [默认: 1]:${NC} "
+        read -r build_choice
+        
+        case "$build_choice" in
+            2)
+                BUILD_MODE="release"
+                echo -e "${GREEN}✓ 已选择: Release 模式 (优化编译)${NC}"
+                ;;
+            1|"")
+                BUILD_MODE="debug"
+                echo -e "${GREEN}✓ 已选择: Debug 模式 (快速编译)${NC}"
+                ;;
+            *)
+                log_warning "无效选项 '$build_choice'，使用默认 Debug 模式"
+                BUILD_MODE="debug"
+                ;;
+        esac
+        echo ""
+    fi
     
-    case "$build_choice" in
-        2)
-            BUILD_MODE="release"
-            echo -e "${GREEN}✓ 已选择: Release 模式 (优化编译)${NC}"
-            ;;
-        1|"")
-            BUILD_MODE="debug"
-            echo -e "${GREEN}✓ 已选择: Debug 模式 (快速编译)${NC}"
-            ;;
-        *)
-            log_warning "无效选项 '$build_choice'，使用默认 Debug 模式"
-            BUILD_MODE="debug"
-            ;;
-    esac
-    echo ""
-    
-    # 询问用户选择增量/全量编译
-    echo -e "${CYAN}================================================${NC}"
-    echo -e "${CYAN}  选择编译方式${NC}"
-    echo -e "${CYAN}================================================${NC}"
-    echo -e "${YELLOW}1.${NC} 增量编译 (Incremental) ${GREEN}[默认]${NC}"
-    echo -e "   └─ 只编译修改的文件"
-    echo -e "   └─ 速度: ${GREEN}快${NC} (利用缓存)"
-    echo -e "   └─ 适合: 日常开发、快速测试"
-    echo ""
-    echo -e "${YELLOW}2.${NC} 全量编译 (Clean Build)"
-    echo -e "   └─ 清理后重新编译所有文件"
-    echo -e "   └─ 速度: ${RED}慢${NC} (从零开始)"
-    echo -e "   └─ 适合: 切换编译模式、排查缓存问题"
-    echo ""
-    echo -e -n "${BLUE}请输入选项 (1-2) [默认: 1]:${NC} "
-    read -r clean_choice
-    
-    case "$clean_choice" in
-        2)
-            CLEAN_BUILD="yes"
-            echo -e "${YELLOW}✓ 已选择: 全量编译 (Clean Build)${NC}"
-            ;;
-        1|"")
-            CLEAN_BUILD="no"
-            echo -e "${GREEN}✓ 已选择: 增量编译 (Incremental)${NC}"
-            ;;
-        *)
-            log_warning "无效选项 '$clean_choice'，使用默认增量编译"
-            CLEAN_BUILD="no"
-            ;;
-    esac
-    echo ""
+    # 询问用户选择增量/全量编译（仅非CI环境）
+    if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ] || [ ! -t 0 ]; then
+        # CI环境：使用默认值
+        log_info "CI环境：使用默认编译策略 (CLEAN_BUILD=$CLEAN_BUILD)"
+    else
+        echo -e "${CYAN}================================================${NC}"
+        echo -e "${CYAN}  选择编译方式${NC}"
+        echo -e "${CYAN}================================================${NC}"
+        echo -e "${YELLOW}1.${NC} 增量编译 (Incremental) ${GREEN}[默认]${NC}"
+        echo -e "   └─ 只编译修改的文件"
+        echo -e "   └─ 速度: ${GREEN}快${NC} (利用缓存)"
+        echo -e "   └─ 适合: 日常开发、快速测试"
+        echo ""
+        echo -e "${YELLOW}2.${NC} 全量编译 (Clean Build)"
+        echo -e "   └─ 清理后重新编译所有文件"
+        echo -e "   └─ 速度: ${RED}慢${NC} (从零开始)"
+        echo -e "   └─ 适合: 切换编译模式、排查缓存问题"
+        echo ""
+        echo -e -n "${BLUE}请输入选项 (1-2) [默认: 1]:${NC} "
+        read -r clean_choice
+        
+        case "$clean_choice" in
+            2)
+                CLEAN_BUILD="yes"
+                echo -e "${YELLOW}✓ 已选择: 全量编译 (Clean Build)${NC}"
+                ;;
+            1|"")
+                CLEAN_BUILD="no"
+                echo -e "${GREEN}✓ 已选择: 增量编译 (Incremental)${NC}"
+                ;;
+            *)
+                log_warning "无效选项 '$clean_choice'，使用默认增量编译"
+                CLEAN_BUILD="no"
+                ;;
+        esac
+        echo ""
+    fi
     
     log_info "Examples目录: $SCRIPT_DIR"
     
@@ -437,16 +447,22 @@ main() {
         "WASM Image Filter (Phase 5.0):wasm_filter"
     )
     
-    # 询问用户选择测试范围
-    echo ""
-    echo -e "${CYAN}================================================${NC}"
-    echo -e "${CYAN}  选择测试范围${NC}"
-    echo -e "${CYAN}================================================${NC}"
-    echo -e "${YELLOW}1.${NC} 测试所有示例 ${GREEN}[默认]${NC}"
-    echo -e "${YELLOW}2.${NC} 选择单个示例测试"
-    echo ""
-    echo -e -n "${BLUE}请输入选项 (1-2) [默认: 1]:${NC} "
-    read -r test_choice
+    # 询问用户选择测试范围（仅非CI环境）
+    if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ] || [ ! -t 0 ]; then
+        # CI环境：默认测试所有示例
+        test_choice="1"
+        log_info "CI环境：测试所有示例"
+    else
+        echo ""
+        echo -e "${CYAN}================================================${NC}"
+        echo -e "${CYAN}  选择测试范围${NC}"
+        echo -e "${CYAN}================================================${NC}"
+        echo -e "${YELLOW}1.${NC} 测试所有示例 ${GREEN}[默认]${NC}"
+        echo -e "${YELLOW}2.${NC} 选择单个示例测试"
+        echo ""
+        echo -e -n "${BLUE}请输入选项 (1-2) [默认: 1]:${NC} "
+        read -r test_choice
+    fi
     
     if [ "$test_choice" = "2" ]; then
         # 显示示例列表供用户选择

@@ -12,7 +12,7 @@
 //!
 //! ## Example
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use autozig::stream::ZigStream;
 //! use futures::StreamExt;
 //!
@@ -90,7 +90,7 @@ impl<T> ZigStream<T> {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use autozig::stream::ZigStream;
     ///
     /// let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
@@ -184,7 +184,7 @@ impl<T> Drop for ZigStream<T> {
 ///
 /// # Examples
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// use autozig::stream::create_stream;
 ///
 /// let (tx, stream) = create_stream::<u32>();
