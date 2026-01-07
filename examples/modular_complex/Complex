@@ -1,0 +1,196 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/sonygod/projects/autozig/autozig/examples/wasm_filter/Cargo.toml
+workspace: /home/sonygod/projects/autozig/autozig/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/sonygod/projects/autozig/autozig/examples/wasm_light/Cargo.toml
+workspace: /home/sonygod/projects/autozig/autozig/Cargo.toml
+warning: unused variable: `all_zig_files`
+   --> engine/src/lib.rs:124:45
+    |
+124 |         let (embedded_code, external_files, all_zig_files) = match scan_result {
+    |                                             ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_all_zig_files`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `all_zig_files`
+   --> engine/src/lib.rs:296:9
+    |
+296 |         all_zig_files: &[PathBuf],
+    |         ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_all_zig_files`
+
+warning: methods `generate_main_module` and `generate_build_zig` are never used
+   --> engine/src/lib.rs:229:8
+    |
+ 46 | impl AutoZigEngine {
+    | ------------------ methods in this implementation
+...
+229 |     fn generate_main_module(
+    |        ^^^^^^^^^^^^^^^^^^^^
+...
+399 |     fn generate_build_zig(
+    |        ^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `autozig-engine` (lib) generated 3 warnings (run `cargo fix --lib -p autozig-engine` to apply 2 suggestions)
+warning: modular_complex@0.1.0: Using MERGED compilation mode (legacy)
+warning: modular_complex@0.1.0: Compiling Zig code: /home/sonygod/projects/autozig/autozig/target/debug/build/modular_complex-613ed7d902bceaa2/out/generated_autozig.zig for target: x86_64-linux-gnu
+warning: modular_complex@0.1.0: Zig compilation successful
+warning: modular_complex@0.1.0: Library: /home/sonygod/projects/autozig/autozig/target/debug/build/modular_complex-613ed7d902bceaa2/out/libautozig.a
+Parser: Successfully parsed file with 1 items
+Parser: Module has 5 items
+Parser: Found struct: Vector2D
+Parser: Total opaque types: 0
+Parser: Total trait impls collected: 0
+Parser: Processing item type: Struct
+Parser:   -> Checking Struct
+Parser: Processing item type: Verbatim
+Parser:   Verbatim content: 'fn vector_create(x: f32, y: f32) -> Vector2D;'
+Parser:   Normalized: 'fn vector_create(x: f32, y: f32) -> Vector2D;'
+Parser:   Starts with 'fn ': true
+Parser: Attempting to parse Verbatim function:
+Parser:   Original: fn vector_create(x: f32, y: f32) -> Vector2D;
+Parser:   With body: fn vector_create(x: f32, y: f32) -> Vector2D { unimplemented!() }
+Parser:   ✓ SUCCESS: Parsed as ItemFn: vector_create
+Parser: Processing item type: Verbatim
+Parser:   Verbatim content: 'fn vector_add(a: Vector2D, b: Vector2D) -> Vector2D;'
+Parser:   Normalized: 'fn vector_add(a: Vector2D, b: Vector2D) -> Vector2D;'
+Parser:   Starts with 'fn ': true
+Parser: Attempting to parse Verbatim function:
+Parser:   Original: fn vector_add(a: Vector2D, b: Vector2D) -> Vector2D;
+Parser:   With body: fn vector_add(a: Vector2D, b: Vector2D) -> Vector2D { unimplemented!() }
+Parser:   ✓ SUCCESS: Parsed as ItemFn: vector_add
+Parser: Processing item type: Verbatim
+Parser:   Verbatim content: 'fn vector_length(v: Vector2D) -> f32;'
+Parser:   Normalized: 'fn vector_length(v: Vector2D) -> f32;'
+Parser:   Starts with 'fn ': true
+Parser: Attempting to parse Verbatim function:
+Parser:   Original: fn vector_length(v: Vector2D) -> f32;
+Parser:   With body: fn vector_length(v: Vector2D) -> f32 { unimplemented!() }
+Parser:   ✓ SUCCESS: Parsed as ItemFn: vector_length
+Parser: Processing item type: Verbatim
+Parser:   Verbatim content: 'fn vector_dot(a: Vector2D, b: Vector2D) -> f32;'
+Parser:   Normalized: 'fn vector_dot(a: Vector2D, b: Vector2D) -> f32;'
+Parser:   Starts with 'fn ': true
+Parser: Attempting to parse Verbatim function:
+Parser:   Original: fn vector_dot(a: Vector2D, b: Vector2D) -> f32;
+Parser:   With body: fn vector_dot(a: Vector2D, b: Vector2D) -> f32 { unimplemented!() }
+Parser:   ✓ SUCCESS: Parsed as ItemFn: vector_dot
+Parser: Successfully parsed file with 1 items
+Parser: Module has 3 items
+Parser: Total opaque types: 0
+Parser: Total trait impls collected: 0
+Parser: Processing item type: Verbatim
+Parser:   Verbatim content: 'fn string_length(ptr: *const i8) -> usize;'
+Parser:   Normalized: 'fn string_length(ptr: *const i8) -> usize;'
+Parser:   Starts with 'fn ': true
+Parser: Attempting to parse Verbatim function:
+Parser:   Original: fn string_length(ptr: *const i8) -> usize;
+Parser:   With body: fn string_length(ptr: *const i8) -> usize { unimplemented!() }
+Parser:   ✓ SUCCESS: Parsed as ItemFn: string_length
+Parser: Processing item type: Verbatim
+Parser:   Verbatim content: 'fn string_compare(a: *const i8, b: *const i8) -> i32;'
+Parser:   Normalized: 'fn string_compare(a: *const i8, b: *const i8) -> i32;'
+Parser:   Starts with 'fn ': true
+Parser: Attempting to parse Verbatim function:
+Parser:   Original: fn string_compare(a: *const i8, b: *const i8) -> i32;
+Parser:   With body: fn string_compare(a: *const i8, b: *const i8) -> i32 { unimplemented!() }
+Parser:   ✓ SUCCESS: Parsed as ItemFn: string_compare
+Parser: Processing item type: Verbatim
+Parser:   Verbatim content: 'fn string_hash(ptr: *const i8) -> u64;'
+Parser:   Normalized: 'fn string_hash(ptr: *const i8) -> u64;'
+Parser:   Starts with 'fn ': true
+Parser: Attempting to parse Verbatim function:
+Parser:   Original: fn string_hash(ptr: *const i8) -> u64;
+Parser:   With body: fn string_hash(ptr: *const i8) -> u64 { unimplemented!() }
+Parser:   ✓ SUCCESS: Parsed as ItemFn: string_hash
+Parser: Successfully parsed file with 1 items
+Parser: Module has 4 items
+Parser: Total opaque types: 0
+Parser: Total trait impls collected: 0
+Parser: Processing item type: Verbatim
+Parser:   Verbatim content: 'fn array_sum_i32(ptr: *const i32, len: usize) -> i64;'
+Parser:   Normalized: 'fn array_sum_i32(ptr: *const i32, len: usize) -> i64;'
+Parser:   Starts with 'fn ': true
+Parser: Attempting to parse Verbatim function:
+Parser:   Original: fn array_sum_i32(ptr: *const i32, len: usize) -> i64;
+Parser:   With body: fn array_sum_i32(ptr: *const i32, len: usize) -> i64 { unimplemented!() }
+Parser:   ✓ SUCCESS: Parsed as ItemFn: array_sum_i32
+Parser: Processing item type: Verbatim
+Parser:   Verbatim content: 'fn array_min_i32(ptr: *const i32, len: usize) -> i32;'
+Parser:   Normalized: 'fn array_min_i32(ptr: *const i32, len: usize) -> i32;'
+Parser:   Starts with 'fn ': true
+Parser: Attempting to parse Verbatim function:
+Parser:   Original: fn array_min_i32(ptr: *const i32, len: usize) -> i32;
+Parser:   With body: fn array_min_i32(ptr: *const i32, len: usize) -> i32 { unimplemented!() }
+Parser:   ✓ SUCCESS: Parsed as ItemFn: array_min_i32
+Parser: Processing item type: Verbatim
+Parser:   Verbatim content: 'fn array_max_i32(ptr: *const i32, len: usize) -> i32;'
+Parser:   Normalized: 'fn array_max_i32(ptr: *const i32, len: usize) -> i32;'
+Parser:   Starts with 'fn ': true
+Parser: Attempting to parse Verbatim function:
+Parser:   Original: fn array_max_i32(ptr: *const i32, len: usize) -> i32;
+Parser:   With body: fn array_max_i32(ptr: *const i32, len: usize) -> i32 { unimplemented!() }
+Parser:   ✓ SUCCESS: Parsed as ItemFn: array_max_i32
+Parser: Processing item type: Verbatim
+Parser:   Verbatim content: 'fn array_reverse_i32(ptr: *mut i32, len: usize);'
+Parser:   Normalized: 'fn array_reverse_i32(ptr: *mut i32, len: usize);'
+Parser:   Starts with 'fn ': true
+Parser: Attempting to parse Verbatim function:
+Parser:   Original: fn array_reverse_i32(ptr: *mut i32, len: usize);
+Parser:   With body: fn array_reverse_i32(ptr: *mut i32, len: usize) { unimplemented!() }
+Parser:   ✓ SUCCESS: Parsed as ItemFn: array_reverse_i32
+warning: unnecessary `unsafe` block
+  --> examples/modular_complex/src/main.rs:49:5
+   |
+49 |     unsafe {
+   |     ^^^^^^ unnecessary `unsafe` block
+   |
+   = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default
+
+warning: unnecessary `unsafe` block
+  --> examples/modular_complex/src/main.rs:68:5
+   |
+68 |     unsafe {
+   |     ^^^^^^ unnecessary `unsafe` block
+
+warning: unnecessary `unsafe` block
+  --> examples/modular_complex/src/main.rs:89:5
+   |
+89 |     unsafe {
+   |     ^^^^^^ unnecessary `unsafe` block
+
+warning: `modular_complex` (bin "modular_complex") generated 3 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `/home/sonygod/projects/autozig/autozig/target/debug/modular_complex`
+=== Modular Complex Example ===
+
+This example demonstrates modular Zig compilation:
+- Multiple .zig files in different directories
+- Each module compiled independently
+- No global variable conflicts
+
+--- Vector Operations ---
+v1 = (3, 4)
+v2 = (1, 2)
+v1 + v2 = (4, 6)
+|v1| = 5
+v1 · v2 = 11
+
+--- String Operations ---
+Length of 'Hello': 5
+Length of 'World': 5
+Compare 'Hello' vs 'World': -1
+Compare 'Hello' vs 'Hello': 0
+Hash of 'Hello': 210676686969
+
+--- Array Operations ---
+Original array: [5, 2, 8, 1, 9, 3, 7, 4, 6]
+Sum: 45
+Min: 1, Max: 9
+Reversed array: [6, 4, 7, 3, 9, 1, 8, 2, 5]
+
+=== All tests passed! ===
+✓ Modular compilation works correctly
+✓ Multiple independent Zig modules
+✓ No global variable conflicts

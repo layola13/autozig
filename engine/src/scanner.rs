@@ -2,8 +2,9 @@
 //! parsing
 
 use std::{
+    collections::HashSet,
     fs,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use anyhow::{
@@ -16,14 +17,57 @@ use syn::{
 };
 use walkdir::WalkDir;
 
+/// Compilation mode for Zig code
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompilationMode {
+    /// Legacy mode: merge all Zig code into one file (default for backward compatibility)
+    Merged,
+    /// Modular mode with main module + @import (Solution 1)
+    ModularImport,
+    /// Modular mode with build.zig (Solution 2, recommended)
+    ModularBuildZig,
+}
+
+impl Default for CompilationMode {
+    fn default() -> Self {
+        // Default to ModularBuildZig (Solution 2, as requested by user)
+        // This provides the best modular compilation experience
+        CompilationMode::ModularBuildZig
+    }
+}
+
+/// Result of scanning, containing either merged code or modular file information
+#[derive(Debug)]
+pub enum ScanResult {
+    /// Merged Zig code (legacy mode)
+    Merged(String),
+    /// Modular files with paths
+    Modular {
+        /// Embedded Zig code snippets from autozig! macros
+        embedded_code: Vec<String>,
+        /// External .zig file paths
+        external_files: Vec<PathBuf>,
+        /// All unique Zig files to be compiled
+        all_zig_files: Vec<PathBuf>,
+        /// C source files to be compiled and linked
+        c_source_files: Vec<PathBuf>,
+    },
+}
+
 /// Scanner for extracting Zig code from Rust source files
 pub struct ZigCodeScanner {
     src_dir: std::path::PathBuf,
     manifest_dir: std::path::PathBuf,
+    mode: CompilationMode,
 }
 
 impl ZigCodeScanner {
     pub fn new(src_dir: impl AsRef<Path>) -> Self {
+        Self::with_mode(src_dir, CompilationMode::default())
+    }
+
+    /// Create scanner with specific compilation mode
+    pub fn with_mode(src_dir: impl AsRef<Path>, mode: CompilationMode) -> Self {
         // Get manifest dir from environment or use src_dir parent
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
             .ok()
@@ -39,14 +83,35 @@ impl ZigCodeScanner {
         Self {
             src_dir: src_dir.as_ref().to_path_buf(),
             manifest_dir,
+            mode,
         }
     }
 
-    /// Scan all .rs files and extract Zig code using AST parsing
-    pub fn scan(&self) -> Result<String> {
-        let mut consolidated_zig = String::new();
-        let mut has_std_import = false;
+    /// Get the compilation mode
+    pub fn mode(&self) -> CompilationMode {
+        self.mode
+    }
 
+    /// Scan all .rs files and extract Zig code using AST parsing
+    /// Returns merged code string for backward compatibility
+    pub fn scan(&self) -> Result<String> {
+        match self.scan_modular()? {
+            ScanResult::Merged(code) => Ok(code),
+            ScanResult::Modular { embedded_code, .. } => {
+                // Fallback: merge embedded code for compatibility
+                Ok(embedded_code.join("\n"))
+            }
+        }
+    }
+
+    /// Scan with modular support - returns ScanResult based on mode
+    pub fn scan_modular(&self) -> Result<ScanResult> {
+        let mut embedded_code = Vec::new();
+        let mut external_files = Vec::new();
+        let mut all_zig_files = HashSet::new();
+        let mut c_source_files = HashSet::new();
+
+        // Scan all Rust files for autozig! macros
         for entry in WalkDir::new(&self.src_dir)
             .into_iter()
             .filter_map(|e| e.ok())
@@ -62,44 +127,98 @@ impl ZigCodeScanner {
                         let mut visitor = AutozigVisitor::default();
                         visitor.visit_file(&file);
 
-                        // Process embedded Zig code
-                        for zig_code in visitor.zig_code {
-                            consolidated_zig.push_str(&zig_code);
-                            consolidated_zig.push('\n');
-                        }
+                        // Collect embedded Zig code
+                        embedded_code.extend(visitor.zig_code);
 
-                        // Process external Zig files
+                        // Collect external Zig file paths
                         for external_file in visitor.external_files {
                             let external_path = self.manifest_dir.join(&external_file);
-                            match fs::read_to_string(&external_path) {
-                                Ok(external_content) => {
-                                    consolidated_zig.push_str(&format!(
-                                        "\n// From external file: {}\n",
-                                        external_file
-                                    ));
-
-                                    // Remove duplicate std import and other common imports
-                                    let cleaned_content = remove_duplicate_imports(
-                                        &external_content,
-                                        &mut has_std_import,
-                                    );
-                                    consolidated_zig.push_str(&cleaned_content);
-                                    consolidated_zig.push('\n');
-                                },
-                                Err(e) => {
-                                    eprintln!(
-                                        "Warning: Failed to read external Zig file {}: {}",
-                                        external_path.display(),
-                                        e
-                                    );
-                                },
+                            if external_path.exists() {
+                                external_files.push(external_path.clone());
+                                all_zig_files.insert(external_path);
+                            } else {
+                                eprintln!(
+                                    "Warning: External Zig file not found: {}",
+                                    external_path.display()
+                                );
                             }
                         }
-                    },
+                    }
                     Err(e) => {
                         eprintln!("Warning: Failed to parse {}: {}", path.display(), e);
-                        // Continue scanning other files
-                    },
+                    }
+                }
+            }
+        }
+
+        // Also scan for standalone .zig and .c files in src directory
+        for entry in WalkDir::new(&self.src_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            let path = entry.path();
+            if let Some(ext) = path.extension() {
+                if ext == "zig" {
+                    all_zig_files.insert(path.to_path_buf());
+                } else if ext == "c" {
+                    // Collect C source files for build.zig compilation
+                    c_source_files.insert(path.to_path_buf());
+                }
+            }
+        }
+
+        // Return based on mode
+        match self.mode {
+            CompilationMode::Merged => {
+                // Legacy mode: merge all code
+                let merged = self.merge_code(&embedded_code, &external_files)?;
+                Ok(ScanResult::Merged(merged))
+            }
+            CompilationMode::ModularImport | CompilationMode::ModularBuildZig => {
+                // Modular modes: return file information
+                Ok(ScanResult::Modular {
+                    embedded_code,
+                    external_files,
+                    all_zig_files: all_zig_files.into_iter().collect(),
+                    c_source_files: c_source_files.into_iter().collect(),
+                })
+            }
+        }
+    }
+
+    /// Merge code for legacy mode
+    fn merge_code(&self, embedded: &[String], external: &[PathBuf]) -> Result<String> {
+        let mut consolidated_zig = String::new();
+        let mut has_std_import = false;
+
+        // Add embedded code
+        for code in embedded {
+            consolidated_zig.push_str(code);
+            consolidated_zig.push('\n');
+        }
+
+        // Add external files
+        for external_path in external {
+            match fs::read_to_string(external_path) {
+                Ok(external_content) => {
+                    consolidated_zig.push_str(&format!(
+                        "\n// From external file: {}\n",
+                        external_path.display()
+                    ));
+
+                    let cleaned_content = remove_duplicate_imports(
+                        &external_content,
+                        &mut has_std_import,
+                    );
+                    consolidated_zig.push_str(&cleaned_content);
+                    consolidated_zig.push('\n');
+                }
+                Err(e) => {
+                    eprintln!(
+                        "Warning: Failed to read external Zig file {}: {}",
+                        external_path.display(),
+                        e
+                    );
                 }
             }
         }

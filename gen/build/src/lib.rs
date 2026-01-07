@@ -22,19 +22,48 @@ pub use simd::{
     SimdConfig,
 };
 
+// Re-export CompilationMode for user convenience
+pub use autozig_engine::CompilationMode;
+
 /// Builder for autozig in build.rs
 pub struct Builder {
     src_dir: PathBuf,
+    mode: CompilationMode,
 }
 
 impl Builder {
-    /// Create a new builder
+    /// Create a new builder with default mode (ModularBuildZig)
     ///
     /// # Arguments
     /// * `src_dir` - The source directory to scan for autozig! macros (usually
     ///   "src")
     pub fn new(src_dir: impl Into<PathBuf>) -> Self {
-        Self { src_dir: src_dir.into() }
+        Self {
+            src_dir: src_dir.into(),
+            mode: CompilationMode::default(),
+        }
+    }
+
+    /// Set compilation mode
+    ///
+    /// # Arguments
+    /// * `mode` - The compilation mode to use:
+    ///   - `CompilationMode::Merged` - Legacy mode (merge all files)
+    ///   - `CompilationMode::ModularImport` - Modular with @import
+    ///   - `CompilationMode::ModularBuildZig` - Modular with build.zig (recommended, default)
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// use autozig_build::{Builder, CompilationMode};
+    ///
+    /// Builder::new("src")
+    ///     .mode(CompilationMode::ModularBuildZig)
+    ///     .build()
+    ///     .expect("Build failed");
+    /// ```
+    pub fn mode(mut self, mode: CompilationMode) -> Self {
+        self.mode = mode;
+        self
     }
 
     /// Run the build process
@@ -50,13 +79,13 @@ impl Builder {
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from("target/debug/build"));
 
-        // Create and run engine
-        let engine = AutoZigEngine::new(&self.src_dir, &out_dir);
+        // Create and run engine with specified mode
+        let engine = AutoZigEngine::with_mode(&self.src_dir, &out_dir, self.mode);
         engine.build()
     }
 }
 
-/// Convenience function for simple build scripts
+/// Convenience function for simple build scripts (uses default ModularBuildZig mode)
 ///
 /// # Example
 ///
@@ -69,6 +98,26 @@ impl Builder {
 /// ```
 pub fn build(src_dir: impl Into<PathBuf>) -> Result<BuildOutput> {
     Builder::new(src_dir).build()
+}
+
+/// Build with specific compilation mode
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use autozig_build::CompilationMode;
+///
+/// fn main() -> anyhow::Result<()> {
+///     // Use modular build.zig mode (recommended)
+///     autozig_build::build_with_mode("src", CompilationMode::ModularBuildZig)?;
+///     Ok(())
+/// }
+/// ```
+pub fn build_with_mode(
+    src_dir: impl Into<PathBuf>,
+    mode: CompilationMode,
+) -> Result<BuildOutput> {
+    Builder::new(src_dir).mode(mode).build()
 }
 
 /// Compile Zig test executables from .zig files in a directory

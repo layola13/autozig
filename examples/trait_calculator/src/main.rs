@@ -138,9 +138,10 @@ fn main() {
     let iterations = 1_000_000;
 
     let start = std::time::Instant::now();
-    let mut sum = 0;
+    let mut sum: i32 = 0;
     for i in 0..iterations {
-        sum += calc.add(i, 1);
+        // Use wrapping_add to prevent overflow panic in debug mode
+        sum = sum.wrapping_add(calc.add(i, 1));
     }
     let duration = start.elapsed();
 
@@ -149,7 +150,7 @@ fn main() {
         "Average: {:.2} ns per operation",
         duration.as_nanos() as f64 / iterations as f64
     );
-    println!("Result checksum: {}", sum);
+    println!("Result checksum (with wrapping): {}", sum);
     println!();
 
     println!("=== All tests passed! ===");

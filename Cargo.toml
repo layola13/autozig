@@ -48,7 +48,8 @@ members = [
     "examples/simd_detect",
     "examples/zero_copy",
     "examples/wasm_filter",
-    "examples/wasm_light"
+    "examples/wasm_light",
+    "examples/modular_complex"
 ]
 
 [features]

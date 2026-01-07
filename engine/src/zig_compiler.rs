@@ -296,6 +296,75 @@ impl ZigCompiler {
 
         Ok(format!("Stdout: {}\nStderr: {}", stdout, stderr))
     }
+
+    /// Compile using build.zig file
+    ///
+    /// # Arguments
+    /// * `build_file` - Path to build.zig file
+    /// * `build_dir` - Build directory (working directory for zig build)
+    /// * `output_lib` - Expected output library path
+    pub fn compile_with_buildzig(
+        &self,
+        build_file: &Path,
+        build_dir: &Path,
+        output_lib: &Path,
+    ) -> Result<()> {
+        println!(
+            "cargo:warning=Compiling with build.zig: {}",
+            build_file.display()
+        );
+
+        // Run: zig build --prefix-lib-dir <build_dir> --prefix <build_dir>
+        let mut cmd = Command::new(&self.zig_path);
+        cmd.arg("build")
+            .arg("--build-file")
+            .arg(build_file)
+            .arg("--prefix")
+            .arg(build_dir)
+            .current_dir(build_dir);
+
+        println!("cargo:warning=Running: {:?}", cmd);
+
+        let output = cmd
+            .output()
+            .context("Failed to execute zig build")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            anyhow::bail!(
+                "Zig build failed:\nStdout: {}\nStderr: {}",
+                stdout,
+                stderr
+            );
+        }
+
+        // The output library should be in build_dir/lib/libautozig.a
+        // Copy it to the expected location
+        let built_lib = build_dir.join("lib").join("libautozig.a");
+        if built_lib.exists() && built_lib != output_lib {
+            std::fs::copy(&built_lib, output_lib)
+                .context("Failed to copy built library")?;
+        } else if !output_lib.exists() {
+            // If the file wasn't created at expected location, check build_dir directly
+            let alt_lib = build_dir.join("libautozig.a");
+            if alt_lib.exists() {
+                std::fs::copy(&alt_lib, output_lib)
+                    .context("Failed to copy built library from alt location")?;
+            } else {
+                anyhow::bail!(
+                    "Built library not found at {} or {}",
+                    built_lib.display(),
+                    alt_lib.display()
+                );
+            }
+        }
+
+        println!("cargo:warning=Build.zig compilation successful");
+        println!("cargo:warning=Library: {}", output_lib.display());
+
+        Ok(())
+    }
 }
 
 impl Default for ZigCompiler {
