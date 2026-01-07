@@ -309,10 +309,7 @@ impl ZigCompiler {
         build_dir: &Path,
         output_lib: &Path,
     ) -> Result<()> {
-        println!(
-            "cargo:warning=Compiling with build.zig: {}",
-            build_file.display()
-        );
+        println!("cargo:warning=Compiling with build.zig: {}", build_file.display());
 
         // Run: zig build --prefix-lib-dir <build_dir> --prefix <build_dir>
         let mut cmd = Command::new(&self.zig_path);
@@ -325,26 +322,19 @@ impl ZigCompiler {
 
         println!("cargo:warning=Running: {:?}", cmd);
 
-        let output = cmd
-            .output()
-            .context("Failed to execute zig build")?;
+        let output = cmd.output().context("Failed to execute zig build")?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stdout = String::from_utf8_lossy(&output.stdout);
-            anyhow::bail!(
-                "Zig build failed:\nStdout: {}\nStderr: {}",
-                stdout,
-                stderr
-            );
+            anyhow::bail!("Zig build failed:\nStdout: {}\nStderr: {}", stdout, stderr);
         }
 
         // The output library should be in build_dir/lib/libautozig.a
         // Copy it to the expected location
         let built_lib = build_dir.join("lib").join("libautozig.a");
         if built_lib.exists() && built_lib != output_lib {
-            std::fs::copy(&built_lib, output_lib)
-                .context("Failed to copy built library")?;
+            std::fs::copy(&built_lib, output_lib).context("Failed to copy built library")?;
         } else if !output_lib.exists() {
             // If the file wasn't created at expected location, check build_dir directly
             let alt_lib = build_dir.join("libautozig.a");

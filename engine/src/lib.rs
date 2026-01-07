@@ -30,7 +30,11 @@ pub mod scanner;
 pub mod type_mapper;
 pub mod zig_compiler;
 
-pub use scanner::{CompilationMode, ScanResult, ZigCodeScanner};
+pub use scanner::{
+    CompilationMode,
+    ScanResult,
+    ZigCodeScanner,
+};
 pub use zig_compiler::ZigCompiler;
 
 /// Main engine for processing autozig! macros during build
@@ -191,8 +195,7 @@ impl AutoZigEngine {
         for file in &external_files {
             let file_name = file.file_name().unwrap_or_default();
             let dest = self.out_dir.join(file_name);
-            fs::copy(file, &dest)
-                .with_context(|| format!("Failed to copy {}", file.display()))?;
+            fs::copy(file, &dest).with_context(|| format!("Failed to copy {}", file.display()))?;
             copied_files.push(dest);
         }
 
@@ -212,7 +215,8 @@ impl AutoZigEngine {
         fs::write(&main_file, &main_zig).context("Failed to write main module")?;
 
         // Generate build.zig file with C file support
-        let build_zig = self.generate_build_zig_with_c(&embedded_code, &copied_files, &copied_c_files)?;
+        let build_zig =
+            self.generate_build_zig_with_c(&embedded_code, &copied_files, &copied_c_files)?;
         let build_file = self.out_dir.join("build.zig");
         fs::write(&build_file, &build_zig).context("Failed to write build.zig")?;
 
@@ -241,22 +245,23 @@ impl AutoZigEngine {
         zig_files: &[PathBuf],
     ) -> Result<String> {
         let mut main = String::new();
-        
+
         // Check if embedded code already contains std import to avoid duplication
-        let has_std_import = embedded_code.iter().any(|code| {
-            code.contains("const std = @import") || code.contains("const std=@import")
-        });
-        
+        let has_std_import = embedded_code
+            .iter()
+            .any(|code| code.contains("const std = @import") || code.contains("const std=@import"));
+
         if !has_std_import {
             main.push_str("const std = @import(\"std\");\n\n");
-            
+
             // Global allocator (defined once to avoid duplication)
             main.push_str("// Global allocator - defined once\n");
             main.push_str("pub var g_allocator: std.mem.Allocator = undefined;\n\n");
         }
 
         // Import external modules and force export of their symbols
-        // This ensures that export functions in imported modules are included in the final binary
+        // This ensures that export functions in imported modules are included in the
+        // final binary
         for (idx, file) in zig_files.iter().enumerate() {
             if let Some(file_name) = file.file_name() {
                 let module_name = format!("mod_{}", idx);
@@ -303,13 +308,13 @@ impl AutoZigEngine {
         let mut build = String::new();
         build.push_str("const std = @import(\"std\");\n\n");
         build.push_str("pub fn build(b: *std.Build) void {\n");
-        
+
         // Target configuration with BASELINE CPU to match zig build-lib behavior
         // This fixes the "incompatible with elf64-x86-64" linking error
         build.push_str("    // Force baseline CPU model to match Rust's expectations\n");
         build.push_str("    const target = b.resolveTargetQuery(.{\n");
         build.push_str("        .cpu_model = .baseline,  // Critical: use baseline, not native\n");
-        
+
         if is_wasm {
             build.push_str("        .cpu_arch = .wasm32,\n");
             build.push_str("        .os_tag = .freestanding,\n");
@@ -341,7 +346,7 @@ impl AutoZigEngine {
                 build.push_str("        .os_tag = .macos,\n");
             }
         }
-        
+
         build.push_str("    });\n");
         build.push_str("    const optimize = b.standardOptimizeOption(.{});\n\n");
 
@@ -381,7 +386,8 @@ impl AutoZigEngine {
             for c_file in c_source_files {
                 if let Some(file_name) = c_file.file_name() {
                     build.push_str(&format!(
-                        "    lib.addCSourceFile(.{{ .file = b.path(\"{}\"), .flags = &.{{\"-fno-sanitize=undefined\"}} }});\n",
+                        "    lib.addCSourceFile(.{{ .file = b.path(\"{}\"), .flags = \
+                         &.{{\"-fno-sanitize=undefined\"}} }});\n",
                         file_name.to_string_lossy()
                     ));
                 }

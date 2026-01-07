@@ -17,13 +17,12 @@ use autozig_engine::{
 
 pub mod simd;
 
+// Re-export CompilationMode for user convenience
+pub use autozig_engine::CompilationMode;
 pub use simd::{
     detect_and_report,
     SimdConfig,
 };
-
-// Re-export CompilationMode for user convenience
-pub use autozig_engine::CompilationMode;
 
 /// Builder for autozig in build.rs
 pub struct Builder {
@@ -50,11 +49,15 @@ impl Builder {
     /// * `mode` - The compilation mode to use:
     ///   - `CompilationMode::Merged` - Legacy mode (merge all files)
     ///   - `CompilationMode::ModularImport` - Modular with @import
-    ///   - `CompilationMode::ModularBuildZig` - Modular with build.zig (recommended, default)
+    ///   - `CompilationMode::ModularBuildZig` - Modular with build.zig
+    ///     (recommended, default)
     ///
     /// # Example
     /// ```rust,no_run
-    /// use autozig_build::{Builder, CompilationMode};
+    /// use autozig_build::{
+    ///     Builder,
+    ///     CompilationMode,
+    /// };
     ///
     /// Builder::new("src")
     ///     .mode(CompilationMode::ModularBuildZig)
@@ -85,7 +88,8 @@ impl Builder {
     }
 }
 
-/// Convenience function for simple build scripts (uses default ModularBuildZig mode)
+/// Convenience function for simple build scripts (uses default ModularBuildZig
+/// mode)
 ///
 /// # Example
 ///
@@ -113,10 +117,7 @@ pub fn build(src_dir: impl Into<PathBuf>) -> Result<BuildOutput> {
 ///     Ok(())
 /// }
 /// ```
-pub fn build_with_mode(
-    src_dir: impl Into<PathBuf>,
-    mode: CompilationMode,
-) -> Result<BuildOutput> {
+pub fn build_with_mode(src_dir: impl Into<PathBuf>, mode: CompilationMode) -> Result<BuildOutput> {
     Builder::new(src_dir).mode(mode).build()
 }
 

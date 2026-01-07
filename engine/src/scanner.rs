@@ -4,7 +4,10 @@
 use std::{
     collections::HashSet,
     fs,
-    path::{Path, PathBuf},
+    path::{
+        Path,
+        PathBuf,
+    },
 };
 
 use anyhow::{
@@ -20,7 +23,8 @@ use walkdir::WalkDir;
 /// Compilation mode for Zig code
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompilationMode {
-    /// Legacy mode: merge all Zig code into one file (default for backward compatibility)
+    /// Legacy mode: merge all Zig code into one file (default for backward
+    /// compatibility)
     Merged,
     /// Modular mode with main module + @import (Solution 1)
     ModularImport,
@@ -36,7 +40,8 @@ impl Default for CompilationMode {
     }
 }
 
-/// Result of scanning, containing either merged code or modular file information
+/// Result of scanning, containing either merged code or modular file
+/// information
 #[derive(Debug)]
 pub enum ScanResult {
     /// Merged Zig code (legacy mode)
@@ -100,7 +105,7 @@ impl ZigCodeScanner {
             ScanResult::Modular { embedded_code, .. } => {
                 // Fallback: merge embedded code for compatibility
                 Ok(embedded_code.join("\n"))
-            }
+            },
         }
     }
 
@@ -143,10 +148,10 @@ impl ZigCodeScanner {
                                 );
                             }
                         }
-                    }
+                    },
                     Err(e) => {
                         eprintln!("Warning: Failed to parse {}: {}", path.display(), e);
-                    }
+                    },
                 }
             }
         }
@@ -173,7 +178,7 @@ impl ZigCodeScanner {
                 // Legacy mode: merge all code
                 let merged = self.merge_code(&embedded_code, &external_files)?;
                 Ok(ScanResult::Merged(merged))
-            }
+            },
             CompilationMode::ModularImport | CompilationMode::ModularBuildZig => {
                 // Modular modes: return file information
                 Ok(ScanResult::Modular {
@@ -182,7 +187,7 @@ impl ZigCodeScanner {
                     all_zig_files: all_zig_files.into_iter().collect(),
                     c_source_files: c_source_files.into_iter().collect(),
                 })
-            }
+            },
         }
     }
 
@@ -206,20 +211,18 @@ impl ZigCodeScanner {
                         external_path.display()
                     ));
 
-                    let cleaned_content = remove_duplicate_imports(
-                        &external_content,
-                        &mut has_std_import,
-                    );
+                    let cleaned_content =
+                        remove_duplicate_imports(&external_content, &mut has_std_import);
                     consolidated_zig.push_str(&cleaned_content);
                     consolidated_zig.push('\n');
-                }
+                },
                 Err(e) => {
                     eprintln!(
                         "Warning: Failed to read external Zig file {}: {}",
                         external_path.display(),
                         e
                     );
-                }
+                },
             }
         }
 

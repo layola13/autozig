@@ -1,5 +1,5 @@
 //! Modular Complex Example
-//! 
+//!
 //! Demonstrates the new modular compilation mode where:
 //! - Multiple .zig files in different directories are compiled separately
 //! - Each module is independent and can be maintained separately
@@ -49,16 +49,16 @@ fn main() {
     unsafe {
         let v1 = vector_create(3.0, 4.0);
         let v2 = vector_create(1.0, 2.0);
-        
+
         println!("v1 = ({}, {})", v1.x, v1.y);
         println!("v2 = ({}, {})", v2.x, v2.y);
-        
+
         let v3 = vector_add(v1, v2);
         println!("v1 + v2 = ({}, {})", v3.x, v3.y);
-        
+
         let len = vector_length(v1);
         println!("|v1| = {}", len);
-        
+
         let dot = vector_dot(v1, v2);
         println!("v1 · v2 = {}", dot);
     }
@@ -69,17 +69,17 @@ fn main() {
         let s1 = b"Hello\0".as_ptr() as *const i8;
         let s2 = b"World\0".as_ptr() as *const i8;
         let s3 = b"Hello\0".as_ptr() as *const i8;
-        
+
         let len1 = string_length(s1);
         let len2 = string_length(s2);
         println!("Length of 'Hello': {}", len1);
         println!("Length of 'World': {}", len2);
-        
+
         let cmp1 = string_compare(s1, s2);
         let cmp2 = string_compare(s1, s3);
         println!("Compare 'Hello' vs 'World': {}", cmp1);
         println!("Compare 'Hello' vs 'Hello': {}", cmp2);
-        
+
         let hash = string_hash(s1);
         println!("Hash of 'Hello': {}", hash);
     }
@@ -89,14 +89,14 @@ fn main() {
     unsafe {
         let mut arr = vec![5, 2, 8, 1, 9, 3, 7, 4, 6];
         println!("Original array: {:?}", arr);
-        
+
         let sum = array_sum_i32(arr.as_ptr(), arr.len());
         println!("Sum: {}", sum);
-        
+
         let min = array_min_i32(arr.as_ptr(), arr.len());
         let max = array_max_i32(arr.as_ptr(), arr.len());
         println!("Min: {}, Max: {}", min, max);
-        
+
         array_reverse_i32(arr.as_mut_ptr(), arr.len());
         println!("Reversed array: {:?}", arr);
     }
