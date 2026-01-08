@@ -397,8 +397,9 @@ fn remove_duplicate_imports(content: &str, has_std_import: &mut bool) -> String 
 }
 
 /// Convert struct declarations to extern struct for C ABI compatibility
-/// This is necessary because Zig's export fn requires extern struct for C calling convention
-/// 
+/// This is necessary because Zig's export fn requires extern struct for C
+/// calling convention
+///
 /// Transforms patterns like:
 ///   `pub const Color = struct {` -> `pub const Color = extern struct {`
 ///   `const Vec3 = struct {` -> `const Vec3 = extern struct {`
@@ -410,18 +411,18 @@ fn remove_duplicate_imports(content: &str, has_std_import: &mut bool) -> String 
 fn convert_to_extern_struct(code: &str) -> String {
     let mut result = String::with_capacity(code.len() + 100);
     let mut remaining = code;
-    
+
     while !remaining.is_empty() {
         // Look for "= struct {" pattern (with possible whitespace variations)
         // This matches named struct declarations like `pub const Name = struct {`
         if let Some(pos) = find_struct_declaration(remaining) {
             // Copy everything before the match
             result.push_str(&remaining[..pos]);
-            
+
             // Check if this is already extern struct or packed struct
             let before_match = &remaining[..pos];
             let trimmed = before_match.trim_end();
-            
+
             // Skip if the previous word is "extern" or "packed"
             if trimmed.ends_with("extern") || trimmed.ends_with("packed") {
                 // Already extern or packed, copy "= struct" as-is
@@ -432,7 +433,7 @@ fn convert_to_extern_struct(code: &str) -> String {
                 // Need to convert: "= struct" -> "= extern struct"
                 let struct_keyword_end = pos + find_struct_keyword_end(&remaining[pos..]);
                 let struct_pattern = &remaining[pos..struct_keyword_end];
-                
+
                 // Replace "= struct" with "= extern struct" (preserve spacing)
                 let converted = struct_pattern
                     .replace("= struct", "= extern struct")
@@ -446,30 +447,31 @@ fn convert_to_extern_struct(code: &str) -> String {
             break;
         }
     }
-    
+
     result
 }
 
 /// Find position of "= struct" or "=struct" pattern (start of the "=" sign)
 fn find_struct_declaration(code: &str) -> Option<usize> {
     let patterns = ["= struct", "=struct"];
-    
+
     let mut earliest_pos = None;
-    
+
     for pattern in patterns {
         if let Some(pos) = code.find(pattern) {
             match earliest_pos {
                 None => earliest_pos = Some(pos),
                 Some(current) if pos < current => earliest_pos = Some(pos),
-                _ => {}
+                _ => {},
             }
         }
     }
-    
+
     earliest_pos
 }
 
-/// Find the end of "= struct" or "=struct" keyword (including the space or brace after)
+/// Find the end of "= struct" or "=struct" keyword (including the space or
+/// brace after)
 fn find_struct_keyword_end(code: &str) -> usize {
     // Find "struct" and return position after it
     if let Some(struct_pos) = code.find("struct") {

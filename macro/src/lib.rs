@@ -176,8 +176,8 @@ fn is_array_return_type(output: &syn::ReturnType) -> Option<(syn::Type, syn::Exp
     None
 }
 
-/// Check if a type is a struct type (non-primitive) that needs ABI-safe pointer passing
-/// Returns true for struct types, false for primitives
+/// Check if a type is a struct type (non-primitive) that needs ABI-safe pointer
+/// passing Returns true for struct types, false for primitives
 fn is_struct_type(ty: &syn::Type) -> bool {
     if let syn::Type::Path(type_path) = ty {
         if let Some(ident) = type_path.path.get_ident() {
@@ -185,10 +185,22 @@ fn is_struct_type(ty: &syn::Type) -> bool {
             // Whitelist: Rust primitive types - these don't need pointer conversion
             return !matches!(
                 ident_str.as_str(),
-                "i8" | "i16" | "i32" | "i64" | "i128" | "isize" |
-                "u8" | "u16" | "u32" | "u64" | "u128" | "usize" |
-                "f32" | "f64" |
-                "bool" | "char" | "()"
+                "i8" | "i16"
+                    | "i32"
+                    | "i64"
+                    | "i128"
+                    | "isize"
+                    | "u8"
+                    | "u16"
+                    | "u32"
+                    | "u64"
+                    | "u128"
+                    | "usize"
+                    | "f32"
+                    | "f64"
+                    | "bool"
+                    | "char"
+                    | "()"
             );
         }
         // Complex path types (like generic types) - treat as struct type
@@ -1055,18 +1067,16 @@ fn generate_single_ffi_declaration(
     // Check if this function needs ABI lowering
     if rust_sig.needs_abi_lowering {
         // Generate FFI declaration for pointer-based version
-        let ptr_fn_name = syn::Ident::new(
-            &format!("{}__autozig_ptr", fn_name),
-            proc_macro2::Span::call_site(),
-        );
-        
+        let ptr_fn_name =
+            syn::Ident::new(&format!("{}__autozig_ptr", fn_name), proc_macro2::Span::call_site());
+
         // Rebuild FFI params with struct types converted to pointers
         let mut abi_ffi_params = Vec::new();
         for input in &sig.inputs {
             if let syn::FnArg::Typed(pat_type) = input {
                 let param_name = &pat_type.pat;
                 let param_type = &pat_type.ty;
-                
+
                 // Convert struct types to *const StructType
                 if is_struct_type(param_type) {
                     abi_ffi_params.push(quote! { #param_name: *const #param_type });
@@ -1075,7 +1085,7 @@ fn generate_single_ffi_declaration(
                 }
             }
         }
-        
+
         // Return type becomes *const ReturnType
         let ptr_output = if let syn::ReturnType::Type(arrow, ty) = output {
             syn::ReturnType::Type(
@@ -1090,7 +1100,7 @@ fn generate_single_ffi_declaration(
         } else {
             output.clone()
         };
-        
+
         return quote! {
             extern "C" {
                 pub fn #ptr_fn_name(#(#abi_ffi_params),*) #ptr_output;
@@ -1178,7 +1188,7 @@ fn generate_single_safe_wrapper(
 
                     // Only struct types get pointer conversion
                     // Arrays, slices, and primitives use original handling
-                    if is_struct_type(param_type) && !is_fixed_array(param_type).is_some() {
+                    if is_struct_type(param_type) && is_fixed_array(param_type).is_none() {
                         // Pass struct by pointer: &param
                         abi_ffi_args.push(quote! { &#param_name });
                     } else if let Some((is_mut, _elem_type)) = is_slice_or_str_ref(param_type) {
@@ -1250,31 +1260,29 @@ fn generate_abi_lowered_wrapper(
                     }
                 }
             };
-        }
+        },
     };
 
     // Generate wrapper name for pointer version
-    let ptr_fn_name = syn::Ident::new(
-        &format!("{}__autozig_ptr", fn_name),
-        proc_macro2::Span::call_site(),
-    );
+    let ptr_fn_name =
+        syn::Ident::new(&format!("{}__autozig_ptr", fn_name), proc_macro2::Span::call_site());
 
     quote! {
         pub fn #fn_name(#inputs) #output {
             unsafe {
                 // Use MaybeUninit for uninitialized stack allocation
                 let mut result = std::mem::MaybeUninit::<#return_type>::uninit();
-                
+
                 // Call pointer-based FFI function
                 let result_ptr = #mod_ident::#ptr_fn_name(#(#ffi_args),*);
-                
+
                 // Copy result from pointer to our stack allocation
                 std::ptr::copy_nonoverlapping(
                     result_ptr,
                     result.as_mut_ptr(),
                     1
                 );
-                
+
                 // Assume initialized and return
                 result.assume_init()
             }
@@ -1550,10 +1558,11 @@ fn generate_async_ffi_and_wrapper(
 
 /// Phase 3: Generate FFI declarations and wrappers with monomorphization
 /// support for include_zig!
-/// 
+///
 /// NOTE: For include_zig!, we DISABLE ABI lowering because external Zig files
-/// are expected to use `extern struct` declarations which are already ABI-compatible.
-/// The engine generates wrappers only for autozig! embedded code.
+/// are expected to use `extern struct` declarations which are already
+/// ABI-compatible. The engine generates wrappers only for autozig! embedded
+/// code.
 fn generate_with_monomorphization_for_include(
     config: &IncludeZigConfig,
 ) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
@@ -1566,15 +1575,17 @@ fn generate_with_monomorphization_for_include(
         // by using `extern struct`. We disable ABI lowering here.
         let mut sig_no_abi_lowering = rust_sig.clone();
         sig_no_abi_lowering.needs_abi_lowering = false;
-        
+
         if !rust_sig.generic_params.is_empty() && !rust_sig.monomorphize_types.is_empty() {
             // Generic function with monomorphization attribute
-            let (mono_ffi, mono_wrappers) = generate_monomorphized_versions(&sig_no_abi_lowering, &mod_name);
+            let (mono_ffi, mono_wrappers) =
+                generate_monomorphized_versions(&sig_no_abi_lowering, &mod_name);
             all_ffi_decls.push(mono_ffi);
             all_wrappers.push(mono_wrappers);
         } else if rust_sig.is_async {
             // Async function
-            let (async_ffi, async_wrapper) = generate_async_ffi_and_wrapper(&sig_no_abi_lowering, &mod_name);
+            let (async_ffi, async_wrapper) =
+                generate_async_ffi_and_wrapper(&sig_no_abi_lowering, &mod_name);
             all_ffi_decls.push(async_ffi);
             all_wrappers.push(async_wrapper);
         } else {

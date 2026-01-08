@@ -112,8 +112,10 @@ fn main() {
     // Test 3: Nested struct return
     println!("Test 3: Transform (nested struct) return");
     let transform = create_transform(5.0, 10.0, 15.0, 2.0);
-    println!("  Transform position: x={}, y={}, z={}", 
-             transform.position.x, transform.position.y, transform.position.z);
+    println!(
+        "  Transform position: x={}, y={}, z={}",
+        transform.position.x, transform.position.y, transform.position.z
+    );
     println!("  Transform scale: {}", transform.scale);
     assert_eq!(transform.position.x, 5.0);
     assert_eq!(transform.position.y, 10.0);

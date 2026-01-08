@@ -422,10 +422,22 @@ fn is_safe_primitive(ty: &syn::Type) -> bool {
             // Whitelist: Rust primitive types
             matches!(
                 ident_str.as_str(),
-                "i8" | "i16" | "i32" | "i64" | "i128" | "isize" |
-                "u8" | "u16" | "u32" | "u64" | "u128" | "usize" |
-                "f32" | "f64" |
-                "bool" | "char" | "()"
+                "i8" | "i16"
+                    | "i32"
+                    | "i64"
+                    | "i128"
+                    | "isize"
+                    | "u8"
+                    | "u16"
+                    | "u32"
+                    | "u64"
+                    | "u128"
+                    | "usize"
+                    | "f32"
+                    | "f64"
+                    | "bool"
+                    | "char"
+                    | "()"
             )
         } else {
             false
@@ -478,7 +490,8 @@ fn parse_function_signature(sig: Signature, attrs: &[syn::Attribute]) -> RustFun
     let monomorphize_types = extract_monomorphize_types(attrs);
 
     // Check if return type needs ABI lowering
-    // If return type is NOT a safe primitive (i.e., it's a struct/enum), we need ABI lowering
+    // If return type is NOT a safe primitive (i.e., it's a struct/enum), we need
+    // ABI lowering
     let needs_abi_lowering = match &sig.output {
         syn::ReturnType::Default => false, // void return, no lowering needed
         syn::ReturnType::Type(_, ty) => !is_safe_primitive(ty),
