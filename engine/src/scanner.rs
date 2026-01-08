@@ -43,7 +43,7 @@ impl Default for CompilationMode {
             _ => {
                 // Default to Merged if not set or invalid
                 CompilationMode::Merged
-            }
+            },
         }
     }
 }
