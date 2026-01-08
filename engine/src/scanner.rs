@@ -34,9 +34,17 @@ pub enum CompilationMode {
 
 impl Default for CompilationMode {
     fn default() -> Self {
-        // Default to ModularBuildZig (Solution 2, as requested by user)
-        // This provides the best modular compilation experience
-        CompilationMode::ModularBuildZig
+        // Read from AUTOZIG_MODE environment variable
+        // Valid values: "merged", "modular_import", "modular_buildzig"
+        match std::env::var("AUTOZIG_MODE").as_deref() {
+            Ok("merged") => CompilationMode::Merged,
+            Ok("modular_import") => CompilationMode::ModularImport,
+            Ok("modular_buildzig") => CompilationMode::ModularBuildZig,
+            _ => {
+                // Default to Merged if not set or invalid
+                CompilationMode::Merged
+            }
+        }
     }
 }
 

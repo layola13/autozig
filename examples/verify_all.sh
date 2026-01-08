@@ -440,6 +440,7 @@ main() {
         "Stream Support (Phase 4.1):stream_basic"
         "SIMD Detection (Phase 4.2):simd_detect"
         "Zero-Copy Buffer (Phase 4.2):zero_copy"
+        "Array Param Test (Fixed Array FFI):array_param_test"
     )
     
     # WASM 示例（需要 wasm-pack）

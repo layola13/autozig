@@ -144,6 +144,16 @@ fn is_slice_or_str_ref(ty: &syn::Type) -> Option<(bool, Option<syn::Type>)> {
     None
 }
 
+/// Check if a type is a fixed-size array [T; N]
+/// Returns Some((element_type, array_size_expr)) if it matches
+/// This enables automatic conversion of [T; N] to *const [N]T in FFI
+fn is_fixed_array(ty: &syn::Type) -> Option<(syn::Type, syn::Expr)> {
+    if let syn::Type::Array(type_array) = ty {
+        return Some(((*type_array.elem).clone(), type_array.len.clone()));
+    }
+    None
+}
+
 
 /// Generate ZST struct types for trait implementations (Phase 1)
 /// Generate Opaque Pointer struct types for stateful trait implementations
@@ -716,6 +726,11 @@ fn generate_ffi_declarations_for_include(config: &IncludeZigConfig) -> proc_macr
 
                     ffi_params.push(quote! { #ptr_name: #ptr_type });
                     ffi_params.push(quote! { #len_name: usize });
+                } else if let Some((_elem_type, _size_expr)) = is_fixed_array(param_type) {
+                    // NEW: Fixed array [T; N] -> *const [N]T
+                    let param_name = &pat_type.pat;
+                    let ptr_type = quote! { *const #param_type };
+                    ffi_params.push(quote! { #param_name: #ptr_type });
                 } else {
                     let param_name = &pat_type.pat;
                     ffi_params.push(quote! { #param_name: #param_type });
@@ -762,6 +777,9 @@ fn generate_safe_wrappers_for_include(config: &IncludeZigConfig) -> proc_macro2:
                             ffi_args.push(quote! { #param_name.as_ptr() });
                         }
                         ffi_args.push(quote! { #param_name.len() });
+                    } else if is_fixed_array(param_type).is_some() {
+                        // NEW: Fixed array [T; N] -> pass &param
+                        ffi_args.push(quote! { &#param_name });
                     } else {
                         ffi_args.push(quote! { #param_name });
                     }
@@ -944,6 +962,12 @@ fn generate_single_ffi_declaration(
 
                 ffi_params.push(quote! { #ptr_name: #ptr_type });
                 ffi_params.push(quote! { #len_name: usize });
+            } else if let Some((_elem_type, _size_expr)) = is_fixed_array(param_type) {
+                // NEW: Fixed array [T; N] -> *const [N]T
+                // This is backward compatible - only triggers for [T; N] types
+                let param_name = &pat_type.pat;
+                let ptr_type = quote! { *const #param_type };
+                ffi_params.push(quote! { #param_name: #ptr_type });
             } else {
                 let param_name = &pat_type.pat;
                 ffi_params.push(quote! { #param_name: #param_type });
@@ -984,6 +1008,10 @@ fn generate_single_safe_wrapper(
                         ffi_args.push(quote! { #param_name.as_ptr() });
                     }
                     ffi_args.push(quote! { #param_name.len() });
+                } else if is_fixed_array(param_type).is_some() {
+                    // NEW: Fixed array [T; N] -> pass &param
+                    // This is backward compatible - only triggers for [T; N] types
+                    ffi_args.push(quote! { &#param_name });
                 } else {
                     ffi_args.push(quote! { #param_name });
                 }

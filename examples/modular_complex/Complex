@@ -5,29 +5,29 @@ warning: profiles for the non root package will be ignored, specify profiles at 
 package:   /home/sonygod/projects/autozig/autozig/examples/wasm_light/Cargo.toml
 workspace: /home/sonygod/projects/autozig/autozig/Cargo.toml
 warning: unused variable: `all_zig_files`
-   --> engine/src/lib.rs:124:45
+   --> engine/src/lib.rs:128:45
     |
-124 |         let (embedded_code, external_files, all_zig_files) = match scan_result {
+128 |         let (embedded_code, external_files, all_zig_files) = match scan_result {
     |                                             ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_all_zig_files`
     |
     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
 
 warning: unused variable: `all_zig_files`
-   --> engine/src/lib.rs:296:9
+   --> engine/src/lib.rs:301:9
     |
-296 |         all_zig_files: &[PathBuf],
+301 |         all_zig_files: &[PathBuf],
     |         ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_all_zig_files`
 
 warning: methods `generate_main_module` and `generate_build_zig` are never used
-   --> engine/src/lib.rs:229:8
+   --> engine/src/lib.rs:233:8
     |
- 46 | impl AutoZigEngine {
+ 50 | impl AutoZigEngine {
     | ------------------ methods in this implementation
 ...
-229 |     fn generate_main_module(
+233 |     fn generate_main_module(
     |        ^^^^^^^^^^^^^^^^^^^^
 ...
-399 |     fn generate_build_zig(
+405 |     fn generate_build_zig(
     |        ^^^^^^^^^^^^^^^^^^
     |
     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default

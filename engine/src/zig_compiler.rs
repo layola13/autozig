@@ -330,24 +330,34 @@ impl ZigCompiler {
             anyhow::bail!("Zig build failed:\nStdout: {}\nStderr: {}", stdout, stderr);
         }
 
-        // The output library should be in build_dir/lib/libautozig.a
-        // Copy it to the expected location
-        let built_lib = build_dir.join("lib").join("libautozig.a");
-        if built_lib.exists() && built_lib != output_lib {
-            std::fs::copy(&built_lib, output_lib).context("Failed to copy built library")?;
-        } else if !output_lib.exists() {
-            // If the file wasn't created at expected location, check build_dir directly
-            let alt_lib = build_dir.join("libautozig.a");
-            if alt_lib.exists() {
-                std::fs::copy(&alt_lib, output_lib)
-                    .context("Failed to copy built library from alt location")?;
-            } else {
-                anyhow::bail!(
-                    "Built library not found at {} or {}",
-                    built_lib.display(),
-                    alt_lib.display()
-                );
+        // The output library should be in build_dir/zig-out/lib/libautozig.a (Zig 0.15.2+)
+        // Try multiple possible locations in order
+        let possible_paths = vec![
+            build_dir.join("zig-out").join("lib").join("libautozig.a"), // Zig 0.15.2+
+            build_dir.join("lib").join("libautozig.a"),                 // Older Zig
+            build_dir.join("libautozig.a"),                              // Direct output
+        ];
+        
+        let mut found = false;
+        for built_lib in &possible_paths {
+            if built_lib.exists() {
+                if built_lib != output_lib {
+                    std::fs::copy(built_lib, output_lib)
+                        .with_context(|| format!("Failed to copy built library from {}", built_lib.display()))?;
+                }
+                found = true;
+                break;
             }
+        }
+        
+        if !found {
+            anyhow::bail!(
+                "Built library not found in any of these locations:\n  {}",
+                possible_paths.iter()
+                    .map(|p| p.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join("\n  ")
+            );
         }
 
         println!("cargo:warning=Build.zig compilation successful");
