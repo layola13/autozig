@@ -176,6 +176,33 @@ fn is_array_return_type(output: &syn::ReturnType) -> Option<(syn::Type, syn::Exp
     None
 }
 
+/// Check if a type is a struct type (non-primitive) that needs ABI-safe pointer passing
+/// Returns true for struct types, false for primitives
+fn is_struct_type(ty: &syn::Type) -> bool {
+    if let syn::Type::Path(type_path) = ty {
+        if let Some(ident) = type_path.path.get_ident() {
+            let ident_str = ident.to_string();
+            // Whitelist: Rust primitive types - these don't need pointer conversion
+            return !matches!(
+                ident_str.as_str(),
+                "i8" | "i16" | "i32" | "i64" | "i128" | "isize" |
+                "u8" | "u16" | "u32" | "u64" | "u128" | "usize" |
+                "f32" | "f64" |
+                "bool" | "char" | "()"
+            );
+        }
+        // Complex path types (like generic types) - treat as struct type
+        true
+    } else if matches!(ty, syn::Type::Tuple(tuple) if tuple.elems.is_empty()) {
+        // Unit type () - not a struct
+        false
+    } else {
+        // Other types (arrays, references, etc.) - not struct types
+        // Arrays and references are already handled by other functions
+        false
+    }
+}
+
 
 /// Generate ZST struct types for trait implementations (Phase 1)
 /// Generate Opaque Pointer struct types for stateful trait implementations
@@ -294,11 +321,11 @@ fn generate_trait_implementations(config: &AutoZigConfig) -> proc_macro2::TokenS
                         // Skip self/&self/&mut self - already handled above
                         continue;
                     }
-    
+
                     if let syn::FnArg::Typed(pat_type) = input {
                         if let syn::Pat::Ident(ident) = &*pat_type.pat {
                             let param_name = &ident.ident;
-    
+
                             if let Some((is_mut, _elem_type)) = is_slice_or_str_ref(&pat_type.ty) {
                                 if is_mut {
                                     ffi_args.push(quote! { #param_name.as_mut_ptr() });
@@ -528,7 +555,8 @@ fn generate_trait_ffi_declarations(config: &AutoZigConfig) -> proc_macro2::Token
 
                         ffi_params.push(quote! { #ptr_name: #ptr_type });
                         ffi_params.push(quote! { #len_name: usize });
-                    } else if let Some((elem_type, _size_expr)) = is_mut_fixed_array_ref(param_type) {
+                    } else if let Some((elem_type, _size_expr)) = is_mut_fixed_array_ref(param_type)
+                    {
                         // NEW: Mutable array &mut [T; N] -> *mut T
                         let ptr_type = quote! { *mut #elem_type };
                         ffi_params.push(quote! { #param_name: #ptr_type });
@@ -1024,16 +1052,65 @@ fn generate_single_ffi_declaration(
         }
     }
 
+    // Check if this function needs ABI lowering
+    if rust_sig.needs_abi_lowering {
+        // Generate FFI declaration for pointer-based version
+        let ptr_fn_name = syn::Ident::new(
+            &format!("{}__autozig_ptr", fn_name),
+            proc_macro2::Span::call_site(),
+        );
+        
+        // Rebuild FFI params with struct types converted to pointers
+        let mut abi_ffi_params = Vec::new();
+        for input in &sig.inputs {
+            if let syn::FnArg::Typed(pat_type) = input {
+                let param_name = &pat_type.pat;
+                let param_type = &pat_type.ty;
+                
+                // Convert struct types to *const StructType
+                if is_struct_type(param_type) {
+                    abi_ffi_params.push(quote! { #param_name: *const #param_type });
+                } else {
+                    abi_ffi_params.push(quote! { #param_name: #param_type });
+                }
+            }
+        }
+        
+        // Return type becomes *const ReturnType
+        let ptr_output = if let syn::ReturnType::Type(arrow, ty) = output {
+            syn::ReturnType::Type(
+                *arrow,
+                Box::new(syn::Type::Ptr(syn::TypePtr {
+                    star_token: syn::Token![*](proc_macro2::Span::call_site()),
+                    const_token: Some(syn::Token![const](proc_macro2::Span::call_site())),
+                    mutability: None,
+                    elem: ty.clone(),
+                })),
+            )
+        } else {
+            output.clone()
+        };
+        
+        return quote! {
+            extern "C" {
+                pub fn #ptr_fn_name(#(#abi_ffi_params),*) #ptr_output;
+            }
+        };
+    }
+
     // Check if return type is an array - FFI should return pointer
     let ffi_output = if let Some((_elem_type, _size_expr)) = is_array_return_type(output) {
         // Array return: FFI returns *const [T; N]
         if let syn::ReturnType::Type(arrow, ty) = output {
-            syn::ReturnType::Type(*arrow, Box::new(syn::Type::Ptr(syn::TypePtr {
-                star_token: syn::Token![*](proc_macro2::Span::call_site()),
-                const_token: Some(syn::Token![const](proc_macro2::Span::call_site())),
-                mutability: None,
-                elem: ty.clone(),
-            })))
+            syn::ReturnType::Type(
+                *arrow,
+                Box::new(syn::Type::Ptr(syn::TypePtr {
+                    star_token: syn::Token![*](proc_macro2::Span::call_site()),
+                    const_token: Some(syn::Token![const](proc_macro2::Span::call_site())),
+                    mutability: None,
+                    elem: ty.clone(),
+                })),
+            )
         } else {
             output.clone()
         }
@@ -1088,6 +1165,44 @@ fn generate_single_safe_wrapper(
         }
     }
 
+    // Check if this function needs ABI lowering (struct return)
+    if rust_sig.needs_abi_lowering {
+        // Rebuild ffi_args with ONLY struct types converted to pointers
+        // Other types (arrays, slices, primitives) keep their original handling
+        let mut abi_ffi_args = Vec::new();
+        for input in &sig.inputs {
+            if let syn::FnArg::Typed(pat_type) = input {
+                if let syn::Pat::Ident(ident) = &*pat_type.pat {
+                    let param_name = &ident.ident;
+                    let param_type = &pat_type.ty;
+
+                    // Only struct types get pointer conversion
+                    // Arrays, slices, and primitives use original handling
+                    if is_struct_type(param_type) && !is_fixed_array(param_type).is_some() {
+                        // Pass struct by pointer: &param
+                        abi_ffi_args.push(quote! { &#param_name });
+                    } else if let Some((is_mut, _elem_type)) = is_slice_or_str_ref(param_type) {
+                        if is_mut {
+                            abi_ffi_args.push(quote! { #param_name.as_mut_ptr() });
+                        } else {
+                            abi_ffi_args.push(quote! { #param_name.as_ptr() });
+                        }
+                        abi_ffi_args.push(quote! { #param_name.len() });
+                    } else if is_mut_fixed_array_ref(param_type).is_some() {
+                        abi_ffi_args.push(quote! { #param_name.as_mut_ptr() });
+                    } else if is_fixed_array(param_type).is_some() {
+                        // Fixed arrays: pass as pointer reference for FFI (same as normal path)
+                        abi_ffi_args.push(quote! { &#param_name });
+                    } else {
+                        abi_ffi_args.push(quote! { #param_name });
+                    }
+                }
+            }
+        }
+        // Generate ABI-safe wrapper using pointer-based call
+        return generate_abi_lowered_wrapper(fn_name, inputs, output, &abi_ffi_args, &mod_ident);
+    }
+
     // Check if return type is an array
     let wrapper_body = if let Some((_elem_type, _size_expr)) = is_array_return_type(output) {
         // Array return: need to dereference pointer and read value
@@ -1112,6 +1227,59 @@ fn generate_single_safe_wrapper(
     };
 
     wrapper_body
+}
+
+/// Generate ABI-lowered wrapper using MaybeUninit + pointer call
+/// This ensures cross-platform ABI compatibility for struct returns
+fn generate_abi_lowered_wrapper(
+    fn_name: &syn::Ident,
+    inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>,
+    output: &syn::ReturnType,
+    ffi_args: &[proc_macro2::TokenStream],
+    mod_ident: &syn::Ident,
+) -> proc_macro2::TokenStream {
+    // Extract return type
+    let return_type = match output {
+        syn::ReturnType::Type(_, ty) => ty,
+        syn::ReturnType::Default => {
+            // Should not happen for needs_abi_lowering, but fallback
+            return quote! {
+                pub fn #fn_name(#inputs) #output {
+                    unsafe {
+                        #mod_ident::#fn_name(#(#ffi_args),*)
+                    }
+                }
+            };
+        }
+    };
+
+    // Generate wrapper name for pointer version
+    let ptr_fn_name = syn::Ident::new(
+        &format!("{}__autozig_ptr", fn_name),
+        proc_macro2::Span::call_site(),
+    );
+
+    quote! {
+        pub fn #fn_name(#inputs) #output {
+            unsafe {
+                // Use MaybeUninit for uninitialized stack allocation
+                let mut result = std::mem::MaybeUninit::<#return_type>::uninit();
+                
+                // Call pointer-based FFI function
+                let result_ptr = #mod_ident::#ptr_fn_name(#(#ffi_args),*);
+                
+                // Copy result from pointer to our stack allocation
+                std::ptr::copy_nonoverlapping(
+                    result_ptr,
+                    result.as_mut_ptr(),
+                    1
+                );
+                
+                // Assume initialized and return
+                result.assume_init()
+            }
+        }
+    }
 }
 
 /// Phase 3: Generate monomorphized versions for a generic function
@@ -1382,6 +1550,10 @@ fn generate_async_ffi_and_wrapper(
 
 /// Phase 3: Generate FFI declarations and wrappers with monomorphization
 /// support for include_zig!
+/// 
+/// NOTE: For include_zig!, we DISABLE ABI lowering because external Zig files
+/// are expected to use `extern struct` declarations which are already ABI-compatible.
+/// The engine generates wrappers only for autozig! embedded code.
 fn generate_with_monomorphization_for_include(
     config: &IncludeZigConfig,
 ) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
@@ -1390,20 +1562,25 @@ fn generate_with_monomorphization_for_include(
     let mod_name = config.get_unique_mod_name();
 
     for rust_sig in &config.rust_signatures {
+        // For include_zig!, external Zig files should handle ABI themselves
+        // by using `extern struct`. We disable ABI lowering here.
+        let mut sig_no_abi_lowering = rust_sig.clone();
+        sig_no_abi_lowering.needs_abi_lowering = false;
+        
         if !rust_sig.generic_params.is_empty() && !rust_sig.monomorphize_types.is_empty() {
             // Generic function with monomorphization attribute
-            let (mono_ffi, mono_wrappers) = generate_monomorphized_versions(rust_sig, &mod_name);
+            let (mono_ffi, mono_wrappers) = generate_monomorphized_versions(&sig_no_abi_lowering, &mod_name);
             all_ffi_decls.push(mono_ffi);
             all_wrappers.push(mono_wrappers);
         } else if rust_sig.is_async {
             // Async function
-            let (async_ffi, async_wrapper) = generate_async_ffi_and_wrapper(rust_sig, &mod_name);
+            let (async_ffi, async_wrapper) = generate_async_ffi_and_wrapper(&sig_no_abi_lowering, &mod_name);
             all_ffi_decls.push(async_ffi);
             all_wrappers.push(async_wrapper);
         } else {
             // Regular function (non-generic, non-async)
-            let ffi_decl = generate_single_ffi_declaration(rust_sig);
-            let wrapper = generate_single_safe_wrapper(rust_sig, &mod_name);
+            let ffi_decl = generate_single_ffi_declaration(&sig_no_abi_lowering);
+            let wrapper = generate_single_safe_wrapper(&sig_no_abi_lowering, &mod_name);
             all_ffi_decls.push(ffi_decl);
             all_wrappers.push(wrapper);
         }

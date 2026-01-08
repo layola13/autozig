@@ -5,34 +5,40 @@ warning: profiles for the non root package will be ignored, specify profiles at 
 package:   /home/sonygod/projects/autozig/autozig/examples/wasm_light/Cargo.toml
 workspace: /home/sonygod/projects/autozig/autozig/Cargo.toml
 warning: unused variable: `all_zig_files`
-   --> engine/src/lib.rs:128:45
+   --> engine/src/lib.rs:145:45
     |
-128 |         let (embedded_code, external_files, all_zig_files) = match scan_result {
+145 |         let (embedded_code, external_files, all_zig_files) = match scan_result {
     |                                             ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_all_zig_files`
     |
     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
 
 warning: unused variable: `all_zig_files`
-   --> engine/src/lib.rs:301:9
+   --> engine/src/lib.rs:384:9
     |
-301 |         all_zig_files: &[PathBuf],
+384 |         all_zig_files: &[PathBuf],
     |         ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_all_zig_files`
 
 warning: methods `generate_main_module` and `generate_build_zig` are never used
-   --> engine/src/lib.rs:233:8
+   --> engine/src/lib.rs:250:8
     |
  50 | impl AutoZigEngine {
     | ------------------ methods in this implementation
 ...
-233 |     fn generate_main_module(
+250 |     fn generate_main_module(
     |        ^^^^^^^^^^^^^^^^^^^^
 ...
-405 |     fn generate_build_zig(
+488 |     fn generate_build_zig(
     |        ^^^^^^^^^^^^^^^^^^
     |
     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
 
-warning: `autozig-engine` (lib) generated 3 warnings (run `cargo fix --lib -p autozig-engine` to apply 2 suggestions)
+warning: function `extract_param_names` is never used
+   --> engine/src/lib.rs:715:4
+    |
+715 | fn extract_param_names(params: &str) -> String {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: `autozig-engine` (lib) generated 4 warnings (run `cargo fix --lib -p autozig-engine` to apply 2 suggestions)
 warning: modular_complex@0.1.0: Using MERGED compilation mode (legacy)
 warning: modular_complex@0.1.0: Compiling Zig code: /home/sonygod/projects/autozig/autozig/target/debug/build/modular_complex-613ed7d902bceaa2/out/generated_autozig.zig for target: x86_64-linux-gnu
 warning: modular_complex@0.1.0: Zig compilation successful

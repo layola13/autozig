@@ -51,7 +51,8 @@ members = [
     "examples/wasm_light",
     "examples/modular_complex",
     "examples/array_param_test",
-    "examples/array_ffi"
+    "examples/array_ffi",
+    "examples/abi_test"
 ]
 
 [features]

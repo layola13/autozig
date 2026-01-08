@@ -359,6 +359,10 @@ fn extract_zig_from_tokens(tokens: &str) -> Option<String> {
             .replace("[ 0 .. len ]", "[0..len]")
             .replace(".. ", "..");
 
+        // Transform struct -> extern struct for C ABI compatibility
+        // Zig's export fn requires extern struct for C calling convention
+        let fixed = convert_to_extern_struct(&fixed);
+
         Some(fixed)
     }
 }
@@ -390,6 +394,89 @@ fn remove_duplicate_imports(content: &str, has_std_import: &mut bool) -> String 
     }
 
     result
+}
+
+/// Convert struct declarations to extern struct for C ABI compatibility
+/// This is necessary because Zig's export fn requires extern struct for C calling convention
+/// 
+/// Transforms patterns like:
+///   `pub const Color = struct {` -> `pub const Color = extern struct {`
+///   `const Vec3 = struct {` -> `const Vec3 = extern struct {`
+///
+/// Skips:
+///   - Already `extern struct`
+///   - `packed struct`
+///   - Anonymous structs (inside other declarations)
+fn convert_to_extern_struct(code: &str) -> String {
+    let mut result = String::with_capacity(code.len() + 100);
+    let mut remaining = code;
+    
+    while !remaining.is_empty() {
+        // Look for "= struct {" pattern (with possible whitespace variations)
+        // This matches named struct declarations like `pub const Name = struct {`
+        if let Some(pos) = find_struct_declaration(remaining) {
+            // Copy everything before the match
+            result.push_str(&remaining[..pos]);
+            
+            // Check if this is already extern struct or packed struct
+            let before_match = &remaining[..pos];
+            let trimmed = before_match.trim_end();
+            
+            // Skip if the previous word is "extern" or "packed"
+            if trimmed.ends_with("extern") || trimmed.ends_with("packed") {
+                // Already extern or packed, copy "= struct" as-is
+                let struct_end = pos + find_struct_keyword_end(&remaining[pos..]);
+                result.push_str(&remaining[pos..struct_end]);
+                remaining = &remaining[struct_end..];
+            } else {
+                // Need to convert: "= struct" -> "= extern struct"
+                let struct_keyword_end = pos + find_struct_keyword_end(&remaining[pos..]);
+                let struct_pattern = &remaining[pos..struct_keyword_end];
+                
+                // Replace "= struct" with "= extern struct" (preserve spacing)
+                let converted = struct_pattern
+                    .replace("= struct", "= extern struct")
+                    .replace("=struct", "= extern struct");
+                result.push_str(&converted);
+                remaining = &remaining[struct_keyword_end..];
+            }
+        } else {
+            // No more struct declarations, copy the rest
+            result.push_str(remaining);
+            break;
+        }
+    }
+    
+    result
+}
+
+/// Find position of "= struct" or "=struct" pattern (start of the "=" sign)
+fn find_struct_declaration(code: &str) -> Option<usize> {
+    let patterns = ["= struct", "=struct"];
+    
+    let mut earliest_pos = None;
+    
+    for pattern in patterns {
+        if let Some(pos) = code.find(pattern) {
+            match earliest_pos {
+                None => earliest_pos = Some(pos),
+                Some(current) if pos < current => earliest_pos = Some(pos),
+                _ => {}
+            }
+        }
+    }
+    
+    earliest_pos
+}
+
+/// Find the end of "= struct" or "=struct" keyword (including the space or brace after)
+fn find_struct_keyword_end(code: &str) -> usize {
+    // Find "struct" and return position after it
+    if let Some(struct_pos) = code.find("struct") {
+        struct_pos + "struct".len()
+    } else {
+        0
+    }
 }
 
 #[cfg(test)]
@@ -445,5 +532,55 @@ export fn test() void {}
         let result2 = remove_duplicate_imports(content, &mut has_std);
         assert!(!result2.contains("const std"));
         assert!(result2.contains("export fn test"));
+    }
+
+    #[test]
+    fn test_convert_to_extern_struct_basic() {
+        let code = "pub const Color = struct { r: f32, g: f32, b: f32, };";
+        let result = convert_to_extern_struct(code);
+        assert!(result.contains("= extern struct"));
+        assert!(!result.contains("= struct {") || result.contains("extern struct"));
+    }
+
+    #[test]
+    fn test_convert_to_extern_struct_already_extern() {
+        let code = "pub const Vec3 = extern struct { x: f32, y: f32, z: f32, };";
+        let result = convert_to_extern_struct(code);
+        // Should remain unchanged - only one "extern struct"
+        assert_eq!(result.matches("extern struct").count(), 1);
+        assert!(!result.contains("extern extern"));
+    }
+
+    #[test]
+    fn test_convert_to_extern_struct_packed() {
+        let code = "pub const PackedData = packed struct { a: u8, b: u8, };";
+        let result = convert_to_extern_struct(code);
+        // Should remain packed struct, not converted
+        assert!(result.contains("packed struct"));
+        assert!(!result.contains("extern struct"));
+    }
+
+    #[test]
+    fn test_convert_to_extern_struct_multiple() {
+        let code = r#"
+            pub const Color = struct { r: f32, g: f32, b: f32, };
+            pub const Vec3 = struct { x: f32, y: f32, z: f32, };
+        "#;
+        let result = convert_to_extern_struct(code);
+        // Both should be converted
+        assert_eq!(result.matches("extern struct").count(), 2);
+    }
+
+    #[test]
+    fn test_convert_to_extern_struct_with_export_fn() {
+        let code = r#"
+            pub const Color = struct { r: f32, g: f32, b: f32, };
+            export fn create_color(r: f32, g: f32, b: f32) Color {
+                return Color{ .r = r, .g = g, .b = b };
+            }
+        "#;
+        let result = convert_to_extern_struct(code);
+        assert!(result.contains("extern struct"));
+        assert!(result.contains("export fn create_color"));
     }
 }

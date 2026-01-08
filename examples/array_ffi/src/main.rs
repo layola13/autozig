@@ -1,5 +1,5 @@
 //! Array FFI Example
-//! 
+//!
 //! This example demonstrates the new array support in autozig:
 //! 1. Fixed-size arrays as parameters [T; N]
 //! 2. Mutable array references &mut [T; N]
@@ -77,11 +77,7 @@ fn main() {
 
     // Example 4: Matrix transpose
     println!("4. Matrix Transpose (2D array)");
-    let matrix = [
-        1, 2, 3,
-        4, 5, 6,
-        7, 8, 9,
-    ];
+    let matrix = [1, 2, 3, 4, 5, 6, 7, 8, 9];
     let mut transposed = [0; 9];
     println!("   Input matrix:");
     print_matrix(&matrix);

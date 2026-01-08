@@ -78,6 +78,8 @@ check_autozig_macro() {
 verify_wasm_example() {
     local example_name=$1
     local example_dir="$2"
+    # Sanitize log name: replace spaces and special chars with underscores
+    local log_name=$(echo "$example_name" | tr ' ()/:' '_____')
     
     TOTAL=$((TOTAL + 1))
     
@@ -120,9 +122,9 @@ verify_wasm_example() {
     
     # 步骤2: 使用 wasm-pack 编译
     log_info "使用 wasm-pack 编译 WASM..."
-    if wasm-pack build --target web --release 2>&1 | tee /tmp/build_${example_name}.log | grep -qE "(error\[|Error)"; then
+    if wasm-pack build --target web --release 2>&1 | tee /tmp/build_${log_name}.log | grep -qE "(error\[|Error)"; then
         log_error "$example_name: WASM 编译失败"
-        echo "查看详细日志: /tmp/build_${example_name}.log"
+        echo "查看详细日志: /tmp/build_${log_name}.log"
         FAILED=$((FAILED + 1))
         cd - > /dev/null
         return 1
@@ -149,6 +151,8 @@ verify_example() {
     local example_name=$1
     local example_dir="$2"
     local dir=$(basename "$example_dir")
+    # Sanitize log name: replace spaces and special chars with underscores
+    local log_name=$(echo "$example_name" | tr ' ()/:' '_____')
     
     TOTAL=$((TOTAL + 1))
     
@@ -195,17 +199,17 @@ verify_example() {
         build_cmd="cargo build --release"
     fi
     
-    if ! $build_cmd 2>&1 | tee /tmp/build_${example_name}.log; then
+    if ! $build_cmd 2>&1 | tee /tmp/build_${log_name}.log; then
         log_error "$example_name: 编译失败"
-        echo "查看详细日志: /tmp/build_${example_name}.log"
+        echo "查看详细日志: /tmp/build_${log_name}.log"
         FAILED=$((FAILED + 1))
         cd - > /dev/null
         return 1
     fi
     # 双重检查：确保日志中没有 "error:" 关键字
-    if grep -qE "error:|error\[|could not compile" /tmp/build_${example_name}.log; then
+    if grep -qE "error:|error\[|could not compile" /tmp/build_${log_name}.log; then
         log_error "$example_name: 编译过程中检测到错误"
-        echo "查看详细日志: /tmp/build_${example_name}.log"
+        echo "查看详细日志: /tmp/build_${log_name}.log"
         FAILED=$((FAILED + 1))
         cd - > /dev/null
         return 1
@@ -222,7 +226,7 @@ verify_example() {
     
     local run_success=false
     # 直接尝试cargo run（通常能找到默认binary）
-    if timeout 30s $run_cmd 2>&1 | tee /tmp/run_${example_name}.log; then
+    if timeout 30s $run_cmd 2>&1 | tee /tmp/run_${log_name}.log; then
         run_success=true
     fi
     
@@ -233,9 +237,9 @@ verify_example() {
         # - "All tests passed"等成功消息
         # - "Received error"等测试预期错误
         # - Parser/warning等非致命消息
-        if grep -E "error:|error\[|could not compile|panicked at" /tmp/run_${example_name}.log | grep -vE "(All .* passed|Received error:|Parser:|warning:)" > /dev/null; then
+        if grep -E "error:|error\[|could not compile|panicked at" /tmp/run_${log_name}.log | grep -vE "(All .* passed|Received error:|Parser:|warning:)" > /dev/null; then
             log_error "$example_name: 运行过程中检测到错误"
-            echo "查看详细日志: /tmp/run_${example_name}.log"
+            echo "查看详细日志: /tmp/run_${log_name}.log"
             FAILED=$((FAILED + 1))
             cd - > /dev/null
             return 1
@@ -249,7 +253,7 @@ verify_example() {
         else
             log_error "$example_name: 运行失败 (退出码: $EXIT_CODE)"
         fi
-        echo "查看详细日志: /tmp/run_${example_name}.log"
+        echo "查看详细日志: /tmp/run_${log_name}.log"
         FAILED=$((FAILED + 1))
         cd - > /dev/null
         return 1
@@ -441,6 +445,7 @@ main() {
         "SIMD Detection (Phase 4.2):simd_detect"
         "Zero-Copy Buffer (Phase 4.2):zero_copy"
         "Array Param Test (Fixed Array FFI):array_param_test"
+        "ABI Test (Struct Return/Param):abi_test"
     )
     
     # WASM 示例（需要 wasm-pack）

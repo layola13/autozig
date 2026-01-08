@@ -1,0 +1,10 @@
+[package]
+name = "abi_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+autozig = { path = "../.." }
+
+[build-dependencies]
+autozig-engine = { path = "../../engine" }

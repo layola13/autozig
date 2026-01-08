@@ -15,7 +15,7 @@
 
 **AutoZig** enables **safe**, **ergonomic** interop between Rust and Zig code, inspired by [autocxx](https://github.com/google/autocxx) for C++.
 
-[Quick Start](#-quick-start) • [Features](#-features) • [Phase 4: Advanced Features](#-phase-4-advanced-features-new) • [Documentation](#-further-reading) • [Examples](examples/) • [Contributing](CONTRIBUTING.md)
+[Quick Start](#-quick-start) • [Tutorial](docs/TUTORIAL.md) • [Features](#-features) • [Documentation](#-further-reading) • [Examples](examples/) • [Contributing](CONTRIBUTING.md)
 
 </div>
 
@@ -783,9 +783,10 @@ at your option.
 ## 📖 Further Reading
 
 ### Core Documentation
-- 📝 [Design Notes](DESIGN.md) - Architecture overview
-- 🎯 [Quick Start](QUICK_START.md) - Get started in 5 minutes
-- 📚 [Implementation Summary](IMPLEMENTATION_SUMMARY.md) - Technical deep dive
+- 📚 **[使用教程 (Tutorial)](docs/TUTORIAL.md)** - 完整的中文使用教程
+- 🎯 [Quick Start](docs/QUICKSTART.md) - Get started in 5 minutes
+- 📝 [Design Notes](docs/DESIGN.md) - Architecture overview
+- 📚 [Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md) - Technical deep dive
 
 ### Phase-Specific Documentation
 - 🔷 [Phase 3: Generics Design](docs/PHASE3_GENERICS_DESIGN.md)

@@ -88,7 +88,24 @@ impl AutoZigEngine {
             return Ok(BuildOutput { lib_path: None });
         }
 
-        let code_hash = format!("{:x}", Sha256::digest(&zig_code));
+        // Generate ABI lowering wrappers and modify original code
+        let (modified_code, abi_wrappers) = self.generate_abi_lowering_with_modified_code(&[zig_code.clone()]);
+        
+        // Combine modified code with ABI wrappers
+        let mut complete_code = if modified_code.is_empty() {
+            zig_code.clone()
+        } else {
+            modified_code
+        };
+        
+        if !abi_wrappers.is_empty() {
+            complete_code.push_str("\n\n");
+            complete_code.push_str("// ABI Lowering: Pointer-based wrappers for struct returns\n");
+            complete_code.push_str("// These wrappers ensure cross-platform ABI compatibility\n");
+            complete_code.push_str(&abi_wrappers);
+        }
+
+        let code_hash = format!("{:x}", Sha256::digest(&complete_code));
         let hash_file = self.out_dir.join(".zig_code_hash");
         let lib_path = self.out_dir.join("libautozig.a");
 
@@ -103,7 +120,7 @@ impl AutoZigEngine {
         }
 
         let zig_file = self.out_dir.join("generated_autozig.zig");
-        fs::write(&zig_file, &zig_code).context("Failed to write Zig source file")?;
+        fs::write(&zig_file, &complete_code).context("Failed to write Zig source file")?;
 
         let rust_target = env::var("TARGET").unwrap_or_else(|_| "native".to_string());
         let zig_target = rust_to_zig_target(&rust_target);
@@ -291,8 +308,74 @@ impl AutoZigEngine {
             }
         }
 
+        // Generate ABI lowering wrappers for struct returns
+        let abi_wrappers = self.generate_abi_lowering_wrappers(embedded_code);
+        if !abi_wrappers.is_empty() {
+            main.push_str("// ABI Lowering: Pointer-based wrappers for struct returns\n");
+            main.push_str("// These wrappers ensure cross-platform ABI compatibility\n");
+            main.push_str(&abi_wrappers);
+            main.push_str("\n");
+        }
+
         Ok(main)
     }
+
+    /// Generate ABI lowering wrappers for functions returning structs
+    /// Transforms: export fn foo() -> StructType
+    /// Into: export fn foo__autozig_ptr() -> *const StructType
+    fn generate_abi_lowering_wrappers(&self, embedded_code: &[String]) -> String {
+        let mut wrappers = String::new();
+        
+        for code in embedded_code {
+            // Extract all export functions that return non-primitive types
+            let export_fns = extract_export_functions(code);
+            
+            for export_fn in export_fns {
+                if needs_abi_wrapper(&export_fn.return_type) {
+                    let wrapper = generate_ptr_wrapper(&export_fn);
+                    wrappers.push_str(&wrapper);
+                    wrappers.push_str("\n");
+                }
+            }
+        }
+        
+        wrappers
+    }
+    /// Generate ABI lowering wrappers AND modify original code to remove export
+    /// Returns (modified_code, wrappers)
+    fn generate_abi_lowering_with_modified_code(&self, embedded_code: &[String]) -> (String, String) {
+        let mut wrappers = String::new();
+        let mut modified_code = String::new();
+        
+        for code in embedded_code {
+            // Extract all export functions that return non-primitive types
+            let export_fns = extract_export_functions(code);
+            let mut functions_to_unexport = Vec::new();
+            
+            for export_fn in export_fns {
+                if needs_abi_wrapper(&export_fn.return_type) {
+                    // Only remove export if type CANNOT be safely returned by value
+                    // Arrays and large structs must use wrappers
+                    if must_use_wrapper(&export_fn.return_type) {
+                        functions_to_unexport.push(export_fn.name.clone());
+                    }
+                    let wrapper = generate_ptr_wrapper(&export_fn);
+                    wrappers.push_str(&wrapper);
+                    wrappers.push_str("\n");
+                }
+            }
+            
+            // Remove export only from functions that MUST use wrappers
+            if functions_to_unexport.is_empty() {
+                modified_code = code.clone();
+            } else {
+                modified_code = remove_export_from_functions(code, &functions_to_unexport);
+            }
+        }
+        
+        (modified_code, wrappers)
+    }
+
 
     /// Generate build.zig file with C source file support
     fn generate_build_zig_with_c(
@@ -447,6 +530,225 @@ fn rust_to_zig_target(rust_target: &str) -> &str {
         _ => "native",
     }
 }
+
+/// Representation of an exported Zig function
+#[derive(Debug, Clone)]
+struct ExportFunction {
+    name: String,
+    params: String,
+    return_type: String,
+}
+
+/// Extract export function declarations from Zig code
+fn extract_export_functions(zig_code: &str) -> Vec<ExportFunction> {
+    let mut functions = Vec::new();
+    
+    // Scanner removes newlines, so code is all on one line
+    // Search for all occurrences of "export fn"
+    let mut pos = 0;
+    while let Some(start) = zig_code[pos..].find("export fn ") {
+        let actual_start = pos + start;
+        // Find the portion from "export fn" onwards
+        let remainder = &zig_code[actual_start..];
+        
+        if let Some(func) = parse_export_function(remainder, &[], 0) {
+            functions.push(func);
+        }
+        
+        // Move past this occurrence
+        pos = actual_start + 10; // length of "export fn "
+    }
+    
+    functions
+}
+
+/// Parse a single export function from Zig code
+fn parse_export_function(line: &str, _lines: &[&str], _idx: usize) -> Option<ExportFunction> {
+    // Pattern: export fn name(params) ReturnType {
+    let line = line.trim();
+    
+    if !line.starts_with("export fn ") {
+        return None;
+    }
+    
+    // Extract function name
+    let after_fn = line.strip_prefix("export fn ")?;
+    let paren_pos = after_fn.find('(')?;
+    let name = after_fn[..paren_pos].trim().to_string();
+    
+    // Extract parameters (everything between ( and ))
+    let after_paren_start = &after_fn[paren_pos + 1..];
+    let mut paren_count = 1;
+    let mut params_end = 0;
+    
+    for (i, ch) in after_paren_start.chars().enumerate() {
+        match ch {
+            '(' => paren_count += 1,
+            ')' => {
+                paren_count -= 1;
+                if paren_count == 0 {
+                    params_end = i;
+                    break;
+                }
+            },
+            _ => {},
+        }
+    }
+    
+    let params = after_paren_start[..params_end].trim().to_string();
+    
+    // Extract return type (between ) and {)
+    let after_params = &after_paren_start[params_end + 1..];
+    let brace_pos = after_params.find('{')?;
+    let return_type = after_params[..brace_pos].trim().to_string();
+    
+    Some(ExportFunction {
+        name,
+        params,
+        return_type,
+    })
+}
+
+/// Check if a Zig type needs ABI wrapper (not a primitive)
+/// All non-primitive types (structs, enums, etc.) need ABI wrappers for cross-platform compatibility
+fn needs_abi_wrapper(zig_type: &str) -> bool {
+    let zig_type = zig_type.trim();
+    
+    // Check for array types [N]T - these always need wrappers
+    if zig_type.starts_with('[') && zig_type.contains(']') {
+        return true;
+    }
+    
+    // Whitelist of safe primitive types - only these can be returned by value
+    // All other types (structs, enums, etc.) need ABI wrappers
+    if matches!(
+        zig_type,
+        "void" | "i8" | "i16" | "i32" | "i64" | "i128" |
+        "u8" | "u16" | "u32" | "u64" | "u128" | "usize" | "isize" |
+        "f32" | "f64" | "bool" | "c_int" | "c_uint" | "c_void"
+    ) {
+        return false;
+    }
+    
+    // All other types (structs, enums, custom types) need ABI wrappers
+    // This ensures the engine generates wrappers that the macro expects
+    true
+}
+
+/// Check if a type MUST use wrapper (cannot be safely exported directly)
+/// Arrays and large structs violate C ABI and will cause Zig compilation errors
+fn must_use_wrapper(zig_type: &str) -> bool {
+    let zig_type = zig_type.trim();
+    
+    // Arrays MUST use wrappers - they cannot be returned by value in C ABI
+    if zig_type.starts_with('[') && zig_type.contains(']') {
+        return true;
+    }
+    
+    // Large structs (>16 bytes) and structs containing dynamic data MUST use wrappers
+    // SpriteBatch contains Vec, TextureAtlas/Layout are large
+    matches!(
+        zig_type,
+        "Sprite" | "SpriteBatch" | "TextureAtlas" | "TextureAtlasLayout" | "SpriteInstance"
+    )
+}
+
+/// Generate pointer-based wrapper for a function returning struct
+fn generate_ptr_wrapper(func: &ExportFunction) -> String {
+    let wrapper_name = format!("{}__autozig_ptr", func.name);
+    let return_ptr_type = format!("*const {}", func.return_type);
+    
+    // Convert struct parameters to pointers
+    let (wrapper_params, forwarding_args) = convert_params_to_ptrs(&func.params);
+    
+    // Generate static storage for the return value
+    format!(
+        "export fn {}({}) {} {{\n    // ABI-safe wrapper: returns pointer instead of struct by value\n    const static = struct {{\n        var result: {} = undefined;\n    }};\n    static.result = {}({});\n    return &static.result;\n}}",
+        wrapper_name,
+        wrapper_params,
+        return_ptr_type,
+        func.return_type,
+        func.name,
+        forwarding_args
+    )
+}
+
+/// Convert struct parameters to pointer parameters
+/// Returns (wrapper_params, forwarding_args)
+fn convert_params_to_ptrs(params: &str) -> (String, String) {
+    if params.trim().is_empty() {
+        return (String::new(), String::new());
+    }
+    
+    let mut wrapper_params = Vec::new();
+    let mut forwarding_args = Vec::new();
+    
+    for param in params.split(',') {
+        let param = param.trim();
+        if param.is_empty() {
+            continue;
+        }
+        
+        // Pattern: "name : Type"
+        if let Some((name, type_part)) = param.split_once(':') {
+            let name = name.trim();
+            let param_type = type_part.trim();
+            
+            // Check if parameter type needs ABI wrapping (is a struct)
+            if needs_abi_wrapper(param_type) {
+                // Convert to pointer: "name: Type" -> "name: *const Type"
+                wrapper_params.push(format!("{} : *const {}", name, param_type));
+                // Dereference when forwarding: "name" -> "name.*"
+                forwarding_args.push(format!("{}.*", name));
+            } else {
+                // Keep primitive types as-is
+                wrapper_params.push(format!("{} : {}", name, param_type));
+                forwarding_args.push(name.to_string());
+            }
+        }
+    }
+    
+    (wrapper_params.join(" , "), forwarding_args.join(", "))
+}
+
+/// Extract parameter names from parameter list for forwarding
+fn extract_param_names(params: &str) -> String {
+    if params.trim().is_empty() {
+        return String::new();
+    }
+    
+    params
+        .split(',')
+        .filter_map(|param| {
+            let param = param.trim();
+            // Pattern: "name: Type" -> extract "name"
+            param.split(':').next().map(|s| s.trim())
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+/// Remove export keyword from specified functions in Zig code
+fn remove_export_from_functions(code: &str, function_names: &[String]) -> String {
+    let mut result = code.to_string();
+    
+    for fn_name in function_names {
+        // Pattern: "export fn function_name(" -> "fn function_name("
+        // Note: Zig code may have spaces compressed, so match both with/without space
+        let pattern_with_space = format!("export fn {} (", fn_name);
+        let pattern_no_space = format!("export fn {}(", fn_name);
+        let replacement_with_space = format!("fn {} (", fn_name);
+        let replacement_no_space = format!("fn {}(", fn_name);
+        
+        if result.contains(&pattern_with_space) {
+            result = result.replace(&pattern_with_space, &replacement_with_space);
+        } else {
+            result = result.replace(&pattern_no_space, &replacement_no_space);
+        }
+    }
+    
+    result
+}
+
 
 /// Output from the build process
 #[derive(Debug)]

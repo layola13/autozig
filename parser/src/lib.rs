@@ -53,6 +53,8 @@ pub struct RustFunctionSignature {
     pub is_async: bool,
     /// Monomorphization attribute types (e.g., #[monomorphize(i32, f64)])
     pub monomorphize_types: Vec<String>,
+    /// Whether this function needs ABI lowering (struct return -> pointer)
+    pub needs_abi_lowering: bool,
 }
 
 /// A Rust struct definition for FFI types
@@ -411,6 +413,31 @@ fn parse_rust_definitions(
     Ok((enums, structs, signatures, trait_impls))
 }
 
+/// Check if a type is a safe primitive (whitelist mechanism for ABI)
+/// Only these types can be safely returned by value across FFI boundaries
+fn is_safe_primitive(ty: &syn::Type) -> bool {
+    if let syn::Type::Path(type_path) = ty {
+        if let Some(ident) = type_path.path.get_ident() {
+            let ident_str = ident.to_string();
+            // Whitelist: Rust primitive types
+            matches!(
+                ident_str.as_str(),
+                "i8" | "i16" | "i32" | "i64" | "i128" | "isize" |
+                "u8" | "u16" | "u32" | "u64" | "u128" | "usize" |
+                "f32" | "f64" |
+                "bool" | "char" | "()"
+            )
+        } else {
+            false
+        }
+    } else if matches!(ty, syn::Type::Tuple(tuple) if tuple.elems.is_empty()) {
+        // Unit type ()
+        true
+    } else {
+        false
+    }
+}
+
 /// Parse a function signature with generics and async support (Phase 3)
 fn parse_function_signature(sig: Signature, attrs: &[syn::Attribute]) -> RustFunctionSignature {
     // Extract generic parameters
@@ -450,11 +477,19 @@ fn parse_function_signature(sig: Signature, attrs: &[syn::Attribute]) -> RustFun
     // Extract monomorphize types from attributes
     let monomorphize_types = extract_monomorphize_types(attrs);
 
+    // Check if return type needs ABI lowering
+    // If return type is NOT a safe primitive (i.e., it's a struct/enum), we need ABI lowering
+    let needs_abi_lowering = match &sig.output {
+        syn::ReturnType::Default => false, // void return, no lowering needed
+        syn::ReturnType::Type(_, ty) => !is_safe_primitive(ty),
+    };
+
     RustFunctionSignature {
         sig,
         generic_params,
         is_async,
         monomorphize_types,
+        needs_abi_lowering,
     }
 }
 
