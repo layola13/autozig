@@ -1,0 +1,11 @@
+[package]
+name = "array_ffi_example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+autozig = { path = "../.." }
+
+[build-dependencies]
+autozig-build = { path = "../../gen/build" }
+anyhow = "1.0"

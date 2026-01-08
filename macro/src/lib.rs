@@ -154,6 +154,28 @@ fn is_fixed_array(ty: &syn::Type) -> Option<(syn::Type, syn::Expr)> {
     None
 }
 
+/// Check if a type is a mutable reference to a fixed-size array &mut [T; N]
+/// Returns Some((element_type, array_size_expr)) if it matches
+fn is_mut_fixed_array_ref(ty: &syn::Type) -> Option<(syn::Type, syn::Expr)> {
+    if let syn::Type::Reference(type_ref) = ty {
+        if type_ref.mutability.is_some() {
+            if let syn::Type::Array(type_array) = &*type_ref.elem {
+                return Some(((*type_array.elem).clone(), type_array.len.clone()));
+            }
+        }
+    }
+    None
+}
+
+/// Check if return type is a fixed-size array [T; N]
+/// Returns Some((element_type, array_size_expr)) if it matches
+fn is_array_return_type(output: &syn::ReturnType) -> Option<(syn::Type, syn::Expr)> {
+    if let syn::ReturnType::Type(_, ty) = output {
+        return is_fixed_array(ty);
+    }
+    None
+}
+
 
 /// Generate ZST struct types for trait implementations (Phase 1)
 /// Generate Opaque Pointer struct types for stateful trait implementations
@@ -272,11 +294,11 @@ fn generate_trait_implementations(config: &AutoZigConfig) -> proc_macro2::TokenS
                         // Skip self/&self/&mut self - already handled above
                         continue;
                     }
-
+    
                     if let syn::FnArg::Typed(pat_type) = input {
                         if let syn::Pat::Ident(ident) = &*pat_type.pat {
                             let param_name = &ident.ident;
-
+    
                             if let Some((is_mut, _elem_type)) = is_slice_or_str_ref(&pat_type.ty) {
                                 if is_mut {
                                     ffi_args.push(quote! { #param_name.as_mut_ptr() });
@@ -284,6 +306,12 @@ fn generate_trait_implementations(config: &AutoZigConfig) -> proc_macro2::TokenS
                                     ffi_args.push(quote! { #param_name.as_ptr() });
                                 }
                                 ffi_args.push(quote! { #param_name.len() });
+                            } else if is_mut_fixed_array_ref(&pat_type.ty).is_some() {
+                                // NEW: Mutable array &mut [T; N] -> pass as_mut_ptr()
+                                ffi_args.push(quote! { #param_name.as_mut_ptr() });
+                            } else if is_fixed_array(&pat_type.ty).is_some() {
+                                // Fixed array [T; N] -> pass &param
+                                ffi_args.push(quote! { &#param_name });
                             } else {
                                 ffi_args.push(quote! { #param_name });
                             }
@@ -500,6 +528,14 @@ fn generate_trait_ffi_declarations(config: &AutoZigConfig) -> proc_macro2::Token
 
                         ffi_params.push(quote! { #ptr_name: #ptr_type });
                         ffi_params.push(quote! { #len_name: usize });
+                    } else if let Some((elem_type, _size_expr)) = is_mut_fixed_array_ref(param_type) {
+                        // NEW: Mutable array &mut [T; N] -> *mut T
+                        let ptr_type = quote! { *mut #elem_type };
+                        ffi_params.push(quote! { #param_name: #ptr_type });
+                    } else if let Some((_elem_type, _size_expr)) = is_fixed_array(param_type) {
+                        // Fixed array [T; N] -> *const [N]T
+                        let ptr_type = quote! { *const #param_type };
+                        ffi_params.push(quote! { #param_name: #ptr_type });
                     } else {
                         ffi_params.push(quote! { #param_name: #param_type });
                     }
@@ -726,6 +762,11 @@ fn generate_ffi_declarations_for_include(config: &IncludeZigConfig) -> proc_macr
 
                     ffi_params.push(quote! { #ptr_name: #ptr_type });
                     ffi_params.push(quote! { #len_name: usize });
+                } else if let Some((elem_type, _size_expr)) = is_mut_fixed_array_ref(param_type) {
+                    // NEW: Mutable array &mut [T; N] -> *mut T
+                    let param_name = &pat_type.pat;
+                    let ptr_type = quote! { *mut #elem_type };
+                    ffi_params.push(quote! { #param_name: #ptr_type });
                 } else if let Some((_elem_type, _size_expr)) = is_fixed_array(param_type) {
                     // NEW: Fixed array [T; N] -> *const [N]T
                     let param_name = &pat_type.pat;
@@ -777,6 +818,9 @@ fn generate_safe_wrappers_for_include(config: &IncludeZigConfig) -> proc_macro2:
                             ffi_args.push(quote! { #param_name.as_ptr() });
                         }
                         ffi_args.push(quote! { #param_name.len() });
+                    } else if is_mut_fixed_array_ref(param_type).is_some() {
+                        // NEW: Mutable array &mut [T; N] -> pass as_mut_ptr()
+                        ffi_args.push(quote! { #param_name.as_mut_ptr() });
                     } else if is_fixed_array(param_type).is_some() {
                         // NEW: Fixed array [T; N] -> pass &param
                         ffi_args.push(quote! { &#param_name });
@@ -962,6 +1006,11 @@ fn generate_single_ffi_declaration(
 
                 ffi_params.push(quote! { #ptr_name: #ptr_type });
                 ffi_params.push(quote! { #len_name: usize });
+            } else if let Some((elem_type, _size_expr)) = is_mut_fixed_array_ref(param_type) {
+                // NEW: Mutable array &mut [T; N] -> *mut T
+                let param_name = &pat_type.pat;
+                let ptr_type = quote! { *mut #elem_type };
+                ffi_params.push(quote! { #param_name: #ptr_type });
             } else if let Some((_elem_type, _size_expr)) = is_fixed_array(param_type) {
                 // NEW: Fixed array [T; N] -> *const [N]T
                 // This is backward compatible - only triggers for [T; N] types
@@ -975,9 +1024,26 @@ fn generate_single_ffi_declaration(
         }
     }
 
+    // Check if return type is an array - FFI should return pointer
+    let ffi_output = if let Some((_elem_type, _size_expr)) = is_array_return_type(output) {
+        // Array return: FFI returns *const [T; N]
+        if let syn::ReturnType::Type(arrow, ty) = output {
+            syn::ReturnType::Type(*arrow, Box::new(syn::Type::Ptr(syn::TypePtr {
+                star_token: syn::Token![*](proc_macro2::Span::call_site()),
+                const_token: Some(syn::Token![const](proc_macro2::Span::call_site())),
+                mutability: None,
+                elem: ty.clone(),
+            })))
+        } else {
+            output.clone()
+        }
+    } else {
+        output.clone()
+    };
+
     quote! {
         extern "C" {
-            pub fn #fn_name(#(#ffi_params),*) #output;
+            pub fn #fn_name(#(#ffi_params),*) #ffi_output;
         }
     }
 }
@@ -1008,6 +1074,9 @@ fn generate_single_safe_wrapper(
                         ffi_args.push(quote! { #param_name.as_ptr() });
                     }
                     ffi_args.push(quote! { #param_name.len() });
+                } else if is_mut_fixed_array_ref(param_type).is_some() {
+                    // NEW: Mutable array &mut [T; N] -> pass as_mut_ptr()
+                    ffi_args.push(quote! { #param_name.as_mut_ptr() });
                 } else if is_fixed_array(param_type).is_some() {
                     // NEW: Fixed array [T; N] -> pass &param
                     // This is backward compatible - only triggers for [T; N] types
@@ -1019,13 +1088,30 @@ fn generate_single_safe_wrapper(
         }
     }
 
-    quote! {
-        pub fn #fn_name(#inputs) #output {
-            unsafe {
-                #mod_ident::#fn_name(#(#ffi_args),*)
+    // Check if return type is an array
+    let wrapper_body = if let Some((_elem_type, _size_expr)) = is_array_return_type(output) {
+        // Array return: need to dereference pointer and read value
+        quote! {
+            pub fn #fn_name(#inputs) #output {
+                unsafe {
+                    let ptr = #mod_ident::#fn_name(#(#ffi_args),*);
+                    // Dereference the pointer to get the array value
+                    *ptr
+                }
             }
         }
-    }
+    } else {
+        // Normal return
+        quote! {
+            pub fn #fn_name(#inputs) #output {
+                unsafe {
+                    #mod_ident::#fn_name(#(#ffi_args),*)
+                }
+            }
+        }
+    };
+
+    wrapper_body
 }
 
 /// Phase 3: Generate monomorphized versions for a generic function

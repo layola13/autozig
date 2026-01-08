@@ -50,7 +50,8 @@ members = [
     "examples/wasm_filter",
     "examples/wasm_light",
     "examples/modular_complex",
-    "examples/array_param_test"
+    "examples/array_param_test",
+    "examples/array_ffi"
 ]
 
 [features]
