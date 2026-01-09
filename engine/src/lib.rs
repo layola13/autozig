@@ -343,8 +343,13 @@ impl AutoZigEngine {
         wrappers
     }
 
-    /// Generate ABI lowering wrappers AND modify original code to remove export
-    /// Returns (modified_code, wrappers)
+    /// Generate ABI lowering wrappers with correct handling for arrays vs
+    /// structs Returns (modified_code, wrappers)
+    /// CRITICAL FIX:
+    /// - Arrays: Rename impl to _impl, generate export wrapper returning
+    ///   pointer (macro expects this)
+    /// - Structs: Keep export AND add __autozig_ptr wrapper (dual export for
+    ///   compatibility)
     fn generate_abi_lowering_with_modified_code(
         &self,
         embedded_code: &[String],
@@ -355,26 +360,31 @@ impl AutoZigEngine {
         for code in embedded_code {
             // Extract all export functions that return non-primitive types
             let export_fns = extract_export_functions(code);
-            let mut functions_to_unexport = Vec::new();
+            let mut functions_to_rename = Vec::new();
 
             for export_fn in export_fns {
                 if needs_abi_wrapper(&export_fn.return_type) {
-                    // Only remove export if type CANNOT be safely returned by value
-                    // Arrays and large structs must use wrappers
                     if must_use_wrapper(&export_fn.return_type) {
-                        functions_to_unexport.push(export_fn.name.clone());
+                        // Arrays: rename to _impl, generate pointer-returning export with original
+                        // name
+                        functions_to_rename.push(export_fn.name.clone());
+                        let wrapper = generate_array_pointer_wrapper(&export_fn);
+                        wrappers.push_str(&wrapper);
+                        wrappers.push_str("\n");
+                    } else {
+                        // Structs: keep export, add __autozig_ptr wrapper
+                        let wrapper = generate_ptr_wrapper(&export_fn);
+                        wrappers.push_str(&wrapper);
+                        wrappers.push_str("\n");
                     }
-                    let wrapper = generate_ptr_wrapper(&export_fn);
-                    wrappers.push_str(&wrapper);
-                    wrappers.push_str("\n");
                 }
             }
 
-            // Remove export only from functions that MUST use wrappers
-            if functions_to_unexport.is_empty() {
+            // Rename array-returning functions to _impl variants
+            if functions_to_rename.is_empty() {
                 modified_code = code.clone();
             } else {
-                modified_code = remove_export_from_functions(code, &functions_to_unexport);
+                modified_code = rename_functions_to_impl(code, &functions_to_rename);
             }
         }
 
@@ -652,22 +662,25 @@ fn needs_abi_wrapper(zig_type: &str) -> bool {
     true
 }
 
-/// Check if a type MUST use wrapper (cannot be safely exported directly)
-/// Arrays and large structs violate C ABI and will cause Zig compilation errors
+/// Check if a type MUST use wrapper (cannot be exported directly due to Zig ABI
+/// restrictions) CRITICAL: Arrays violate Zig's C ABI calling convention and
+/// cause compilation errors Structs CAN be exported (though ABI may be
+/// unstable), so we allow dual export
 fn must_use_wrapper(zig_type: &str) -> bool {
     let zig_type = zig_type.trim();
 
-    // Arrays MUST use wrappers - they cannot be returned by value in C ABI
+    // Arrays MUST use wrappers - Zig refuses to compile export functions returning
+    // arrays Error: "return type '[N]T' not allowed in function with calling
+    // convention 'x86_64_sysv'"
     if zig_type.starts_with('[') && zig_type.contains(']') {
         return true;
     }
 
-    // Large structs (>16 bytes) and structs containing dynamic data MUST use
-    // wrappers SpriteBatch contains Vec, TextureAtlas/Layout are large
-    matches!(
-        zig_type,
-        "Sprite" | "SpriteBatch" | "TextureAtlas" | "TextureAtlasLayout" | "SpriteInstance"
-    )
+    // Structs CAN be exported (return false here to keep dual export)
+    // Even large structs like Sprite, TextureAtlas are allowed by Zig compiler
+    // The wrapper provides ABI-safe alternative, but original export is kept for
+    // compatibility
+    false
 }
 
 /// Generate pointer-based wrapper for a function returning struct
@@ -741,6 +754,47 @@ fn extract_param_names(params: &str) -> String {
         .collect::<Vec<_>>()
         .join(", ")
 }
+/// Rename functions to _impl variants (for array-returning functions)
+/// Pattern: "export fn function_name(" -> "fn function_name_impl("
+fn rename_functions_to_impl(code: &str, function_names: &[String]) -> String {
+    let mut result = code.to_string();
+
+    for fn_name in function_names {
+        // Remove export and rename to _impl
+        let pattern_with_space = format!("export fn {} (", fn_name);
+        let pattern_no_space = format!("export fn {}(", fn_name);
+        let replacement_with_space = format!("fn {}_impl (", fn_name);
+        let replacement_no_space = format!("fn {}_impl(", fn_name);
+
+        if result.contains(&pattern_with_space) {
+            result = result.replace(&pattern_with_space, &replacement_with_space);
+        } else {
+            result = result.replace(&pattern_no_space, &replacement_no_space);
+        }
+    }
+
+    result
+}
+
+/// Generate pointer-returning export wrapper for array-returning functions
+/// This creates an export function with original name that calls the _impl
+/// version and returns a pointer (matching what macro expects)
+fn generate_array_pointer_wrapper(func: &ExportFunction) -> String {
+    let impl_name = format!("{}_impl", func.name);
+    let return_ptr_type = format!("*const {}", func.return_type);
+
+    // Convert struct parameters to pointers
+    let (wrapper_params, forwarding_args) = convert_params_to_ptrs(&func.params);
+
+    // Generate wrapper that calls _impl and returns pointer
+    format!(
+        "export fn {}({}) {} {{\n    // Macro expects pointer return for array types\n    const \
+         static = struct {{\n        var result: {} = undefined;\n    }};\n    static.result = \
+         {}({});\n    return &static.result;\n}}",
+        func.name, wrapper_params, return_ptr_type, func.return_type, impl_name, forwarding_args
+    )
+}
+
 /// Remove export keyword from specified functions in Zig code
 fn remove_export_from_functions(code: &str, function_names: &[String]) -> String {
     let mut result = code.to_string();

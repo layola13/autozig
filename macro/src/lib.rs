@@ -1017,6 +1017,10 @@ fn generate_single_ffi_declaration(
     let fn_name = &sig.ident;
     let output = &sig.output;
 
+    // Check if this function returns an array - if so, parameters need pointer
+    // conversion
+    let has_array_return = is_array_return_type(output).is_some();
+
     let mut ffi_params = Vec::new();
 
     for input in &sig.inputs {
@@ -1054,6 +1058,12 @@ fn generate_single_ffi_declaration(
             } else if let Some((_elem_type, _size_expr)) = is_fixed_array(param_type) {
                 // NEW: Fixed array [T; N] -> *const [N]T
                 // This is backward compatible - only triggers for [T; N] types
+                let param_name = &pat_type.pat;
+                let ptr_type = quote! { *const #param_type };
+                ffi_params.push(quote! { #param_name: #ptr_type });
+            } else if has_array_return && is_struct_type(param_type) {
+                // CRITICAL FIX: For array returns, Engine converts struct params to pointers
+                // This matches Engine's convert_params_to_ptrs behavior
                 let param_name = &pat_type.pat;
                 let ptr_type = quote! { *const #param_type };
                 ffi_params.push(quote! { #param_name: #ptr_type });
@@ -1146,6 +1156,10 @@ fn generate_single_safe_wrapper(
     let output = &sig.output;
     let mod_ident = syn::Ident::new(mod_name, proc_macro2::Span::call_site());
 
+    // Check if this function returns an array - if so, struct params need pointer
+    // conversion
+    let has_array_return = is_array_return_type(output).is_some();
+
     let mut ffi_args = Vec::new();
 
     for input in &sig.inputs {
@@ -1167,6 +1181,10 @@ fn generate_single_safe_wrapper(
                 } else if is_fixed_array(param_type).is_some() {
                     // NEW: Fixed array [T; N] -> pass &param
                     // This is backward compatible - only triggers for [T; N] types
+                    ffi_args.push(quote! { &#param_name });
+                } else if has_array_return && is_struct_type(param_type) {
+                    // CRITICAL FIX: For array returns, pass struct params as pointers
+                    // This matches Engine's behavior where struct params become *const StructType
                     ffi_args.push(quote! { &#param_name });
                 } else {
                     ffi_args.push(quote! { #param_name });

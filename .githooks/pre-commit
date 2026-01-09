@@ -18,7 +18,11 @@ if ! cargo fmt --all; then
     echo -e "${RED}❌ Auto-formatting failed!${NC}"
     exit 1
 fi
-echo -e "${GREEN}✅ Code auto-formatted${NC}"
+
+# Auto-stage any formatting changes
+# This prevents the infinite loop where fmt changes aren't staged
+git add -u
+echo -e "${GREEN}✅ Code auto-formatted and staged${NC}"
 
 # Step 2: Verify formatting (should pass after auto-format)
 echo -e "\n${YELLOW}📝 Verifying code formatting...${NC}"
