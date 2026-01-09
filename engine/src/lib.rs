@@ -539,6 +539,8 @@ fn rust_to_zig_target(rust_target: &str) -> &str {
         // WebAssembly
         "wasm32-unknown-unknown" => "wasm32-freestanding",
         "wasm32-wasi" => "wasm32-wasi",
+        "wasm64-unknown-unknown" => "wasm64-freestanding",
+        "wasm64-wasi" => "wasm64-wasi",
 
         // Default to native
         _ => "native",

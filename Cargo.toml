@@ -49,6 +49,7 @@ members = [
     "examples/zero_copy",
     "examples/wasm_filter",
     "examples/wasm_light",
+    "examples/wasm64bit",
     "examples/modular_complex",
     "examples/array_param_test",
     "examples/array_ffi",
