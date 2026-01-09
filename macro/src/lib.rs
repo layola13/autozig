@@ -1150,6 +1150,15 @@ fn generate_single_safe_wrapper(
     rust_sig: &autozig_parser::RustFunctionSignature,
     mod_name: &str,
 ) -> proc_macro2::TokenStream {
+    // Check if this function has AutoZig binding configuration
+    let config = &rust_sig.binding_config;
+
+    // If there's binding config, generate dual exports (wasm-bindgen + C-style)
+    if config.strategy.is_some() {
+        return generate_dual_binding_wrappers(rust_sig, mod_name);
+    }
+
+    // Otherwise, use original single wrapper generation
     let sig = &rust_sig.sig;
     let fn_name = &sig.ident;
     let inputs = &sig.inputs;
@@ -1255,6 +1264,106 @@ fn generate_single_safe_wrapper(
     };
 
     wrapper_body
+}
+
+/// Generate dual binding wrappers (wasm-bindgen + C-style export)
+/// This is the core of the AutoZig dual export feature
+fn generate_dual_binding_wrappers(
+    rust_sig: &autozig_parser::RustFunctionSignature,
+    mod_name: &str,
+) -> proc_macro2::TokenStream {
+    let config = &rust_sig.binding_config;
+    let sig = &rust_sig.sig;
+    let fn_name = &sig.ident;
+    let inputs = &sig.inputs;
+    let output = &sig.output;
+    let mod_ident = syn::Ident::new(mod_name, proc_macro2::Span::call_site());
+
+    // Get strategy (default: "dual")
+    let strategy = config.strategy.as_deref().unwrap_or("dual");
+
+    // Get prefixes
+    let prefix_bindgen = config.prefix_bindgen.as_deref().unwrap_or("wasm_");
+    let prefix_c = config.prefix_c.as_deref().unwrap_or("wasm64_");
+
+    // Build FFI call arguments
+    let mut ffi_args = Vec::new();
+    for input in &sig.inputs {
+        if let syn::FnArg::Typed(pat_type) = input {
+            if let syn::Pat::Ident(ident) = &*pat_type.pat {
+                let param_name = &ident.ident;
+                let param_type = &pat_type.ty;
+
+                if let Some((is_mut, _elem_type)) = is_slice_or_str_ref(param_type) {
+                    if is_mut {
+                        ffi_args.push(quote! { #param_name.as_mut_ptr() });
+                    } else {
+                        ffi_args.push(quote! { #param_name.as_ptr() });
+                    }
+                    ffi_args.push(quote! { #param_name.len() });
+                } else if is_mut_fixed_array_ref(param_type).is_some() {
+                    ffi_args.push(quote! { #param_name.as_mut_ptr() });
+                } else if is_fixed_array(param_type).is_some() {
+                    ffi_args.push(quote! { &#param_name });
+                } else {
+                    ffi_args.push(quote! { #param_name });
+                }
+            }
+        }
+    }
+
+    let mut wrappers = Vec::new();
+
+    // Generate wasm-bindgen wrapper
+    if strategy == "dual" || strategy == "bindgen" {
+        let export_name = quote::format_ident!("{}{}", prefix_bindgen, fn_name);
+        wrappers.push(quote! {
+            #[wasm_bindgen::prelude::wasm_bindgen]
+            pub fn #export_name(#inputs) #output {
+                unsafe {
+                    #mod_ident::#fn_name(#(#ffi_args),*)
+                }
+            }
+        });
+    }
+
+    // Generate C-style export wrapper
+    if strategy == "dual" || strategy == "c_only" {
+        let export_name = quote::format_ident!("{}{}", prefix_c, fn_name);
+
+        // Handle return type conversion if specified
+        let (ret_type, body) = if let (Some(c_ret), Some(map_fn)) = (&config.c_ret, &config.map_fn)
+        {
+            // With type mapping
+            (
+                quote! { -> #c_ret },
+                quote! {
+                    let res = unsafe { #mod_ident::#fn_name(#(#ffi_args),*) };
+                    let mapper = #map_fn;
+                    mapper(res)
+                },
+            )
+        } else {
+            // Direct pass-through
+            (
+                quote! { #output },
+                quote! {
+                    unsafe { #mod_ident::#fn_name(#(#ffi_args),*) }
+                },
+            )
+        };
+
+        wrappers.push(quote! {
+            #[no_mangle]
+            pub extern "C" fn #export_name(#inputs) #ret_type {
+                #body
+            }
+        });
+    }
+
+    quote! {
+        #(#wrappers)*
+    }
 }
 
 /// Generate ABI-lowered wrapper using MaybeUninit + pointer call

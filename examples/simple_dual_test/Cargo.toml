@@ -1,0 +1,16 @@
+[package]
+name = "autozig-simple-dual-test"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+autozig = { path = "../../" }
+wasm-bindgen = "0.2"
+
+[build-dependencies]
+autozig-build = { path = "../../gen/build" }
+
+[lib]
+crate-type = ["cdylib", "rlib"]

@@ -1,0 +1,12 @@
+[build]
+# Target wasm64 for WebAssembly Memory64 support
+target = "wasm64-unknown-unknown"
+# 强制使用 MODULAR 编译模式
+rustflags = ["--cfg", "autozig_modular"]
+
+[unstable]
+# wasm64 is a tier-3 target, requires building std from source
+build-std = ["std", "panic_abort"]
+
+[env]
+AUTOZIG_MODE = "modular"

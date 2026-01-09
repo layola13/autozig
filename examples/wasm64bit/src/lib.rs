@@ -1,135 +1,96 @@
-//! AutoZig WASM 3.0 64-bit 手动绑定实现
+//! AutoZig WASM 3.0 64-bit 自动双重绑定实现
 //!
-//! 本实现同时支持两种绑定方式：
+//! 使用新的 #[autozig(...)] 属性自动生成两种绑定：
 //! 1. wasm-bindgen 绑定（用于生成完整的 wasm 模块）
 //! 2. 手动 C 风格导出（用于直接 WebAssembly.instantiate 调用）
+//!
+//! 这消除了代码重复，只需要声明一次函数！
 
 use autozig::include_zig;
 use wasm_bindgen::prelude::*;
 
 // 使用 include_zig! 宏引入 Zig wasm64 实现
+// 新增 #[autozig(...)] 属性实现自动双重绑定
 include_zig!("src/wasm64.zig", {
+    // 1. 普通透传 (Dual) - 自动生成 wasm_get_memory_size 和 wasm64_get_memory_size
+    #[autozig(strategy = "dual")]
     fn get_memory_size() -> usize;
+
+    // 2. 普通透传 (Dual)
+    #[autozig(strategy = "dual")]
     fn grow_memory(delta: usize) -> isize;
+
+    // 3. 指针转换 (Dual with Mapping)
+    // wasm-bindgen: 返回 *mut u8
+    // C ABI: 返回 usize (指针转换为整数)
+    #[autozig(strategy = "dual", c_ret = "usize", map_fn = "|ptr| ptr as usize")]
     fn alloc_large_buffer() -> *mut u8;
+
+    // 4. 普通透传
+    #[autozig(strategy = "dual")]
     fn get_buffer_size() -> usize;
+
+    // 5. 普通透传
+    #[autozig(strategy = "dual")]
     fn write_buffer(offset: usize, value: u8);
+
+    // 6. 普通透传
+    #[autozig(strategy = "dual")]
     fn read_buffer(offset: usize) -> u8;
+
+    // 7. 普通透传
+    #[autozig(strategy = "dual")]
     fn fill_buffer(start: usize, length: usize, value: u8);
+
+    // 8. 普通透传
+    #[autozig(strategy = "dual")]
     fn checksum_buffer(start: usize, length: usize) -> u64;
+
+    // 9. Bool 转换 (Dual with Mapping)
+    // wasm-bindgen: 返回 bool
+    // C ABI: 返回 u32 (0 或 1)
+    #[autozig(
+        strategy = "dual",
+        c_ret = "u32",
+        map_fn = "|b: bool| if b { 1 } else { 0 }"
+    )]
     fn write_at_high_address(value: u64) -> bool;
+
+    // 10. 普通透传
+    #[autozig(strategy = "dual")]
     fn read_at_high_address() -> u64;
+
+    // 11. 普通透传
+    #[autozig(strategy = "dual")]
     fn get_arch_info() -> u32;
+
+    // 12. 普通透传
+    #[autozig(strategy = "dual")]
     fn get_pointer_size() -> usize;
+
+    // 13. 内存测试函数 - 自动生成双重绑定！
+    // 生成：wasm_run_memory_test() 和 wasm64_run_memory_test()
+    #[autozig(strategy = "dual")]
+    fn run_memory_test() -> u32;
 });
 
-// ============================================================================
-// wasm-bindgen 导出接口
-// ============================================================================
-
-/// 获取当前 WebAssembly 内存大小
+/// 格式化测试结果（可选的包装器）
 #[wasm_bindgen]
-pub fn wasm_get_memory_size() -> usize {
-    get_memory_size()
-}
-
-/// 增长 WebAssembly 内存
-#[wasm_bindgen]
-pub fn wasm_grow_memory(delta: usize) -> isize {
-    grow_memory(delta)
-}
-
-/// 分配大缓冲区
-#[wasm_bindgen]
-pub fn wasm_alloc_large_buffer() -> *mut u8 {
-    alloc_large_buffer()
-}
-
-/// 获取缓冲区大小
-#[wasm_bindgen]
-pub fn wasm_get_buffer_size() -> usize {
-    get_buffer_size()
-}
-
-/// 写入缓冲区
-#[wasm_bindgen]
-pub fn wasm_write_buffer(offset: usize, value: u8) {
-    write_buffer(offset, value);
-}
-
-/// 读取缓冲区
-#[wasm_bindgen]
-pub fn wasm_read_buffer(offset: usize) -> u8 {
-    read_buffer(offset)
-}
-
-/// 填充缓冲区
-#[wasm_bindgen]
-pub fn wasm_fill_buffer(start: usize, length: usize, value: u8) {
-    fill_buffer(start, length, value);
-}
-
-/// 计算校验和
-#[wasm_bindgen]
-pub fn wasm_checksum_buffer(start: usize, length: usize) -> u64 {
-    checksum_buffer(start, length)
-}
-
-/// 高地址写入
-#[wasm_bindgen]
-pub fn wasm_write_at_high_address(value: u64) -> bool {
-    write_at_high_address(value)
-}
-
-/// 高地址读取
-#[wasm_bindgen]
-pub fn wasm_read_at_high_address() -> u64 {
-    read_at_high_address()
-}
-
-/// 获取架构信息
-#[wasm_bindgen]
-pub fn wasm_get_arch_info() -> u32 {
-    get_arch_info()
-}
-
-/// 获取指针大小
-#[wasm_bindgen]
-pub fn wasm_get_pointer_size() -> usize {
-    get_pointer_size()
-}
-
-/// 运行完整测试
-#[wasm_bindgen]
-pub fn run_memory_test() -> String {
-    let start_size = get_memory_size();
-    let buffer_size = get_buffer_size();
-    let arch = get_arch_info();
-
-    let test_size = 1024 * 1024;
-    fill_buffer(0, test_size, 0xAA);
-
-    let checksum = checksum_buffer(0, test_size);
-    let expected = 0xAA * test_size as u64;
-
-    let high_addr_test = write_at_high_address(0xDEADBEEFCAFEBABE);
-    let high_addr_value = if high_addr_test {
-        read_at_high_address()
-    } else {
-        0
-    };
+pub fn run_memory_test_formatted() -> String {
+    let result = wasm_run_memory_test();
+    let arch = wasm_get_arch_info();
+    let start_size = wasm_get_memory_size();
+    let buffer_size = wasm_get_buffer_size();
 
     format!(
-        "WASM{} Memory Test:\nMemory: {} pages\nBuffer: {} bytes\nChecksum: {} (expected: {}) - \
-         {}\nHigh addr: {} (value: 0x{:X})",
+        "WASM{} Memory Test:\nMemory: {} pages\nBuffer: {} bytes\nTest Result: 0x{:X}\n  \
+         Checksum: {}\n  High Address: {}",
         arch,
         start_size,
         buffer_size,
-        checksum,
-        expected,
-        if checksum == expected { "PASS" } else { "FAIL" },
-        if high_addr_test { "PASS" } else { "SKIP" },
-        high_addr_value
+        result,
+        if result & 0x1 != 0 { "PASS" } else { "FAIL" },
+        if result & 0x2 != 0 { "PASS" } else { "SKIP" }
     )
 }
 
@@ -140,126 +101,22 @@ pub fn init() {
     console_error_panic_hook::set_once();
 }
 
-// ============================================================================
-// 手动 C 风格导出（用于直接 WebAssembly API 调用）
-// ============================================================================
-
-/// C 风格导出：获取内存大小
-#[no_mangle]
-pub extern "C" fn wasm64_get_memory_size() -> usize {
-    get_memory_size()
-}
-
-/// C 风格导出：增长内存
-#[no_mangle]
-pub extern "C" fn wasm64_grow_memory(delta: usize) -> isize {
-    grow_memory(delta)
-}
-
-/// C 风格导出：分配缓冲区
-#[no_mangle]
-pub extern "C" fn wasm64_alloc_large_buffer() -> usize {
-    alloc_large_buffer() as usize
-}
-
-/// C 风格导出：获取缓冲区大小
-#[no_mangle]
-pub extern "C" fn wasm64_get_buffer_size() -> usize {
-    get_buffer_size()
-}
-
-/// C 风格导出：写入缓冲区
-#[no_mangle]
-pub extern "C" fn wasm64_write_buffer(offset: usize, value: u8) {
-    write_buffer(offset, value);
-}
-
-/// C 风格导出：读取缓冲区
-#[no_mangle]
-pub extern "C" fn wasm64_read_buffer(offset: usize) -> u8 {
-    read_buffer(offset)
-}
-
-/// C 风格导出：填充缓冲区
-#[no_mangle]
-pub extern "C" fn wasm64_fill_buffer(start: usize, length: usize, value: u8) {
-    fill_buffer(start, length, value);
-}
-
-/// C 风格导出：计算校验和
-#[no_mangle]
-pub extern "C" fn wasm64_checksum_buffer(start: usize, length: usize) -> u64 {
-    checksum_buffer(start, length)
-}
-
-/// C 风格导出：高地址写入
-#[no_mangle]
-pub extern "C" fn wasm64_write_at_high_address(value: u64) -> u32 {
-    if write_at_high_address(value) {
-        1
-    } else {
-        0
-    }
-}
-
-/// C 风格导出：高地址读取
-#[no_mangle]
-pub extern "C" fn wasm64_read_at_high_address() -> u64 {
-    read_at_high_address()
-}
-
-/// C 风格导出：获取架构信息
-#[no_mangle]
-pub extern "C" fn wasm64_get_arch_info() -> u32 {
-    get_arch_info()
-}
-
-/// C 风格导出：获取指针大小
-#[no_mangle]
-pub extern "C" fn wasm64_get_pointer_size() -> usize {
-    get_pointer_size()
-}
-
-/// C 风格导出：运行内存测试
-#[no_mangle]
-pub extern "C" fn wasm64_run_memory_test() -> u32 {
-    let mut result: u32 = 0;
-
-    let test_size = 1024 * 1024;
-    fill_buffer(0, test_size, 0xAA);
-
-    let checksum = checksum_buffer(0, test_size);
-    let expected = 0xAA * test_size as u64;
-    if checksum == expected {
-        result |= 0x1;
-    }
-
-    if write_at_high_address(0xDEADBEEFCAFEBABE) {
-        let value = read_at_high_address();
-        if value == 0xDEADBEEFCAFEBABE {
-            result |= 0x2;
-        }
-    }
-
-    result
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_arch_info() {
-        let arch = get_arch_info();
+        let arch = wasm_get_arch_info();
         assert!(arch == 32 || arch == 64);
     }
 
     #[test]
     fn test_buffer_operations() {
-        let size = get_buffer_size();
+        let size = wasm_get_buffer_size();
         assert!(size > 0);
 
-        write_buffer(0, 42);
-        assert_eq!(read_buffer(0), 42);
+        wasm_write_buffer(0, 42);
+        assert_eq!(wasm_read_buffer(0), 42);
     }
 }

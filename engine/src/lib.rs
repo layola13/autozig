@@ -400,7 +400,9 @@ impl AutoZigEngine {
     ) -> Result<String> {
         let rust_target = env::var("TARGET").unwrap_or_else(|_| "native".to_string());
         let zig_target = rust_to_zig_target(&rust_target);
-        let is_wasm = zig_target.contains("wasm32");
+        let is_wasm32 = zig_target.contains("wasm32");
+        let is_wasm64 = zig_target.contains("wasm64");
+        let is_wasm = is_wasm32 || is_wasm64;
 
         let mut build = String::new();
         build.push_str("const std = @import(\"std\");\n\n");
@@ -412,7 +414,10 @@ impl AutoZigEngine {
         build.push_str("    const target = b.resolveTargetQuery(.{\n");
         build.push_str("        .cpu_model = .baseline,  // Critical: use baseline, not native\n");
 
-        if is_wasm {
+        if is_wasm64 {
+            build.push_str("        .cpu_arch = .wasm64,\n");
+            build.push_str("        .os_tag = .freestanding,\n");
+        } else if is_wasm32 {
             build.push_str("        .cpu_arch = .wasm32,\n");
             build.push_str("        .os_tag = .freestanding,\n");
         } else if zig_target.contains("x86_64") {

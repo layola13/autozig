@@ -43,6 +43,33 @@ pub struct GenericParam {
     pub bounds: Vec<String>,
 }
 
+/// Configuration for AutoZig binding generation (wasm-bindgen + C-style)
+#[derive(Clone, Default)]
+pub struct AutoZigBindingConfig {
+    /// Binding strategy: "dual", "bindgen", "c_only"
+    pub strategy: Option<String>,
+    /// Prefix for wasm-bindgen exports (default: "wasm_")
+    pub prefix_bindgen: Option<String>,
+    /// Prefix for C-style exports (default: "wasm64_")
+    pub prefix_c: Option<String>,
+    /// C ABI return type (for type conversion)
+    pub c_ret: Option<syn::Type>,
+    /// Mapping function for return value conversion
+    pub map_fn: Option<syn::Expr>,
+}
+
+impl std::fmt::Debug for AutoZigBindingConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AutoZigBindingConfig")
+            .field("strategy", &self.strategy)
+            .field("prefix_bindgen", &self.prefix_bindgen)
+            .field("prefix_c", &self.prefix_c)
+            .field("c_ret", &self.c_ret.as_ref().map(|_| "<Type>"))
+            .field("map_fn", &self.map_fn.as_ref().map(|_| "<Expr>"))
+            .finish()
+    }
+}
+
 /// A Rust function signature that will have a safe wrapper generated
 #[derive(Clone)]
 pub struct RustFunctionSignature {
@@ -55,6 +82,8 @@ pub struct RustFunctionSignature {
     pub monomorphize_types: Vec<String>,
     /// Whether this function needs ABI lowering (struct return -> pointer)
     pub needs_abi_lowering: bool,
+    /// AutoZig binding configuration for dual export support
+    pub binding_config: AutoZigBindingConfig,
 }
 
 /// A Rust struct definition for FFI types
@@ -497,12 +526,16 @@ fn parse_function_signature(sig: Signature, attrs: &[syn::Attribute]) -> RustFun
         syn::ReturnType::Type(_, ty) => !is_safe_primitive(ty),
     };
 
+    // Extract AutoZig binding configuration from attributes
+    let binding_config = extract_autozig_binding_config(attrs);
+
     RustFunctionSignature {
         sig,
         generic_params,
         is_async,
         monomorphize_types,
         needs_abi_lowering,
+        binding_config,
     }
 }
 
@@ -524,6 +557,58 @@ fn extract_monomorphize_types(attrs: &[syn::Attribute]) -> Vec<String> {
         }
     }
     Vec::new()
+}
+
+/// Extract AutoZig binding configuration from #[autozig(...)] attribute
+/// Supports: strategy, prefix_bindgen, prefix_c, c_ret, map_fn
+fn extract_autozig_binding_config(attrs: &[syn::Attribute]) -> AutoZigBindingConfig {
+    let mut config = AutoZigBindingConfig::default();
+
+    for attr in attrs {
+        if attr.path().is_ident("autozig") {
+            // Parse nested meta items
+            let _ = attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("strategy") {
+                    if let Ok(value) = meta.value() {
+                        if let Ok(lit) = value.parse::<syn::LitStr>() {
+                            config.strategy = Some(lit.value());
+                        }
+                    }
+                } else if meta.path.is_ident("prefix_bindgen") {
+                    if let Ok(value) = meta.value() {
+                        if let Ok(lit) = value.parse::<syn::LitStr>() {
+                            config.prefix_bindgen = Some(lit.value());
+                        }
+                    }
+                } else if meta.path.is_ident("prefix_c") {
+                    if let Ok(value) = meta.value() {
+                        if let Ok(lit) = value.parse::<syn::LitStr>() {
+                            config.prefix_c = Some(lit.value());
+                        }
+                    }
+                } else if meta.path.is_ident("c_ret") {
+                    if let Ok(value) = meta.value() {
+                        if let Ok(lit) = value.parse::<syn::LitStr>() {
+                            if let Ok(ty) = syn::parse_str::<syn::Type>(&lit.value()) {
+                                config.c_ret = Some(ty);
+                            }
+                        }
+                    }
+                } else if meta.path.is_ident("map_fn") {
+                    if let Ok(value) = meta.value() {
+                        if let Ok(lit) = value.parse::<syn::LitStr>() {
+                            if let Ok(expr) = syn::parse_str::<syn::Expr>(&lit.value()) {
+                                config.map_fn = Some(expr);
+                            }
+                        }
+                    }
+                }
+                Ok(())
+            });
+        }
+    }
+
+    config
 }
 
 /// Parse a trait implementation (impl Trait for Type)
