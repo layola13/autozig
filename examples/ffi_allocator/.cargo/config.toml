@@ -1,0 +1,10 @@
+[build]
+# Default build configuration for native targets
+
+# For native targets, use system linker to fix Zig archive compatibility
+[target.'cfg(not(target_arch = "wasm32"))']
+rustflags = ["-C", "linker=gcc"]
+
+# For WASM target, use default settings (wasm-ld)
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "target-feature=+simd128"]

@@ -446,6 +446,7 @@ main() {
         "Zero-Copy Buffer (Phase 4.2):zero_copy"
         "Array Param Test (Fixed Array FFI):array_param_test"
         "ABI Test (Struct Return/Param):abi_test"
+        "FFI Allocator Pattern (GPA/Sync):ffi_allocator"
     )
     
     # WASM 示例（需要 wasm-pack）

@@ -52,7 +52,8 @@ members = [
     "examples/modular_complex",
     "examples/array_param_test",
     "examples/array_ffi",
-    "examples/abi_test"
+    "examples/abi_test",
+    "examples/ffi_allocator"
 ]
 
 [features]
