@@ -120,19 +120,32 @@ verify_wasm_example() {
         return 1
     fi
     
-    # 步骤2: 使用 wasm-pack 编译
-    log_info "使用 wasm-pack 编译 WASM..."
-    if wasm-pack build --target web --release 2>&1 | tee /tmp/build_${log_name}.log | grep -qE "(error\[|Error)"; then
-        log_error "$example_name: WASM 编译失败"
-        echo "查看详细日志: /tmp/build_${log_name}.log"
-        FAILED=$((FAILED + 1))
-        cd - > /dev/null
-        return 1
+    # 步骤2: 编译 / 构建
+    if [ -f "build.sh" ]; then
+        log_info "发现自定义构建脚本 build.sh，尝试运行 (Option 2)..."
+        # 针对交互式脚本传入 "2" (wasm64模式)
+        if echo "2" | bash build.sh 2>&1 | tee /tmp/build_${log_name}.log | grep -qE "(error:|Error:|FAILED)"; then
+            log_error "$example_name: 自定义构建失败"
+            echo "查看详细日志: /tmp/build_${log_name}.log"
+            FAILED=$((FAILED + 1))
+            cd - > /dev/null
+            return 1
+        fi
+        log_success "$example_name: 自定义构建成功"
+    else
+        log_info "使用 wasm-pack 编译 WASM..."
+        if wasm-pack build --target web --release 2>&1 | tee /tmp/build_${log_name}.log | grep -qE "(error\[|Error)"; then
+            log_error "$example_name: WASM 编译失败"
+            echo "查看详细日志: /tmp/build_${log_name}.log"
+            FAILED=$((FAILED + 1))
+            cd - > /dev/null
+            return 1
+        fi
+        log_success "$example_name: WASM 编译成功"
     fi
-    log_success "$example_name: WASM 编译成功"
     
     # 步骤3: 检查生成的 WASM 文件
-    if [ -f "pkg/*.wasm" ] || [ -d "pkg" ]; then
+    if [ -f "pkg/*.wasm" ] || [ -d "pkg" ] || [ -n "$(find . -name '*.wasm' -path '*/pkg/*' 2>/dev/null)" ]; then
         log_success "$example_name: WASM 包生成成功 (pkg/)"
         PASSED=$((PASSED + 1))
     else
@@ -449,9 +462,10 @@ main() {
         "FFI Allocator Pattern (GPA/Sync):ffi_allocator"
     )
     
-    # WASM 示例（需要 wasm-pack）
+    # WASM 示例（需要 wasm-pack 或 build.sh）
     WASM_EXAMPLES=(
         "WASM Image Filter (Phase 5.0):wasm_filter"
+        "WASM64 Memory64 (Phase 3.0):wasm64bit"
     )
     
     # 询问用户选择测试范围（仅非CI环境）

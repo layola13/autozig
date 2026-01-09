@@ -125,7 +125,7 @@ export fn get_simd_features() u32 {
 
 // Benchmark vector operations
 export fn benchmark_vector_ops(size: usize, iterations: u32) u64 {
-    const allocator = std.heap.c_allocator;
+    const allocator = if (builtin.link_libc) std.heap.c_allocator else std.heap.page_allocator;
 
     // Allocate test data
     const a = allocator.alloc(f32, size) catch return 0;
