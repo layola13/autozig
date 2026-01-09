@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AutoZig WASM64 Memory Demo - 手动绑定版本</title>
+    <title>AutoZig WASM64 Demo - 使用自动生成绑定</title>
     <style>
         * {
             margin: 0;
@@ -24,7 +25,7 @@
             background: white;
             border-radius: 15px;
             padding: 30px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
         }
 
         h1 {
@@ -42,7 +43,7 @@
         .badge {
             display: inline-block;
             padding: 5px 12px;
-            background: #4CAF50;
+            background: #38ef7d;
             color: white;
             border-radius: 20px;
             font-size: 0.9em;
@@ -97,13 +98,11 @@
             cursor: pointer;
             transition: all 0.3s ease;
             font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
         }
 
         button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
 
         .btn-primary {
@@ -134,11 +133,6 @@
         .btn-dark {
             background: linear-gradient(135deg, #434343 0%, #000000 100%);
             color: white;
-        }
-
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
         }
 
         .log-container {
@@ -191,43 +185,35 @@
             border-bottom: 2px solid #667eea;
         }
 
-        .footer {
-            text-align: center;
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
-            color: #666;
+        .code-note {
+            background: #f0f8ff;
+            border: 1px solid #3a7bd5;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: monospace;
         }
 
-        .tech-stack {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-top: 10px;
-        }
-
-        .tech-badge {
-            padding: 5px 10px;
-            background: #f0f0f0;
-            border-radius: 5px;
-            font-size: 0.85em;
-            color: #555;
+        .code-note code {
+            background: #e8f4fc;
+            padding: 2px 6px;
+            border-radius: 4px;
         }
     </style>
 </head>
+
 <body>
     <div class="container">
-        <h1>🚀 AutoZig WebAssembly Memory64 Demo</h1>
+        <h1>🚀 AutoZig WASM64 Demo</h1>
         <p class="subtitle">
-            演示 WASM 3.0 Memory64 提案的核心特性
-            <span class="badge">手动绑定版本</span>
+            使用自动生成的 TypeScript 绑定
+            <span class="badge">bindings.js</span>
         </p>
 
-        <div class="tech-stack">
-            <div class="tech-badge">🦀 Rust (手动 C 导出)</div>
-            <div class="tech-badge">⚡ Zig (Memory64 Intrinsics)</div>
-            <div class="tech-badge">🌐 WebAssembly Memory64</div>
-            <div class="tech-badge">📦 零依赖 JS</div>
+        <div class="code-note">
+            <strong>💡 使用自动生成的绑定：</strong><br>
+            <code>import { loadWasm } from './pkg/bindings.js';</code><br>
+            无需手动编写 BigInt 转换！
         </div>
 
         <div class="system-info">
@@ -264,19 +250,14 @@
 
         <h2 class="section-title">测试日志</h2>
         <div class="log-container" id="log"></div>
-
-        <div class="footer">
-            <p><strong>AutoZig WASM64 Demo</strong> - 2026</p>
-            <p>采用手动绑定方案，完全绕过 wasm-bindgen，实现完整的 wasm64 支持</p>
-        </div>
     </div>
 
-    <script>
-        // 全局 WASM 实例
-        let wasmInstance = null;
-        let wasmMemory = null;
+    <script type="module">
+        // ✨ 使用自动生成的绑定！
+        import { loadWasm } from './pkg/bindings.js';
 
-        // 日志函数
+        let wasm = null;
+
         function log(message, type = 'info') {
             const logDiv = document.getElementById('log');
             const timestamp = new Date().toLocaleTimeString();
@@ -287,71 +268,53 @@
             logDiv.scrollTop = logDiv.scrollHeight;
         }
 
-        // 更新系统信息显示
         function updateSystemInfo() {
-            if (!wasmInstance) return;
+            if (!wasm) return;
+            const e = wasm.exports;
 
-            const exports = wasmInstance.exports;
-            
-            // 获取架构信息 (u32 返回值)
-            const arch = Number(exports.wasm64_get_arch_info());
+            // 直接调用，无需手动 BigInt 转换！
+            const arch = Number(e.get_arch_info());
             document.getElementById('arch').textContent = `WASM${arch}`;
-            
-            // 获取指针大小 (usize 可能是 BigInt)
-            const ptrSize = Number(exports.wasm64_get_pointer_size());
+
+            const ptrSize = Number(e.get_pointer_size());
             document.getElementById('ptrSize').textContent = `${ptrSize} 字节`;
-            
-            // 获取内存大小 (usize 可能是 BigInt)
-            const memPages = Number(exports.wasm64_get_memory_size());
+
+            const memPages = Number(e.get_memory_size());
             const memMB = (memPages * 64 / 1024).toFixed(2);
             document.getElementById('memSize').textContent = `${memPages} 页 (${memMB} MB)`;
-            
-            // 获取缓冲区大小 (usize 可能是 BigInt)
-            const bufSize = Number(exports.wasm64_get_buffer_size());
+
+            const bufSize = Number(e.get_buffer_size());
             const bufMB = (bufSize / (1024 * 1024)).toFixed(2);
             document.getElementById('bufSize').textContent = `${bufSize} 字节 (${bufMB} MB)`;
         }
 
-        // 初始化 WebAssembly
-        async function initWasm() {
+        async function init() {
             try {
-                log('正在加载 WebAssembly 模块...', 'info');
-                
-                const response = await fetch('pkg/autozig_wasm64bit.wasm');
-                const buffer = await response.arrayBuffer();
-                
-                log('正在实例化 WASM 模块...', 'info');
-                const result = await WebAssembly.instantiate(buffer, {});
-                
-                wasmInstance = result.instance;
-                wasmMemory = wasmInstance.exports.memory;
-                
+                log('正在加载 WebAssembly 模块（使用自动生成绑定）...', 'info');
+
+                // ✨ 一行代码加载 WASM！
+                wasm = await loadWasm('./pkg/autozig_wasm64bit.wasm');
+
                 log('✅ WebAssembly 模块加载成功！', 'success');
-                log(`使用手动绑定，直接调用 C 风格导出函数`, 'info');
-                
+                log('使用 bindings.js 自动处理 BigInt 转换', 'info');
+
                 updateSystemInfo();
-                
             } catch (error) {
                 log(`❌ 加载失败: ${error.message}`, 'error');
                 console.error('详细错误:', error);
             }
         }
 
-        // 基础内存操作测试
-        function testBasicMemory() {
-            if (!wasmInstance) {
-                log('⚠️ WASM 未加载', 'warning');
-                return;
-            }
-
+        // 测试函数 - 暴露到全局
+        window.testBasicMemory = function () {
+            if (!wasm) { log('⚠️ WASM 未加载', 'warning'); return; }
             log('开始基础内存操作测试...', 'info');
-            const exports = wasmInstance.exports;
-            
+
             try {
-                // 写入测试 (offset 是 usize，在 wasm64 中需要 BigInt)
-                exports.wasm64_write_buffer(BigInt(0), 42);
-                const value = exports.wasm64_read_buffer(BigInt(0));
-                
+                // ✨ 参数自动转换为 BigInt！
+                wasm.exports.write_buffer(0, 42);
+                const value = wasm.exports.read_buffer(0);
+
                 if (value === 42) {
                     log(`✅ 基础内存测试通过: 写入 42, 读取 ${value}`, 'success');
                 } else {
@@ -360,30 +323,23 @@
             } catch (error) {
                 log(`❌ 测试失败: ${error.message}`, 'error');
             }
-        }
+        };
 
-        // 填充缓冲区测试
-        function testFillBuffer() {
-            if (!wasmInstance) {
-                log('⚠️ WASM 未加载', 'warning');
-                return;
-            }
-
+        window.testFillBuffer = function () {
+            if (!wasm) { log('⚠️ WASM 未加载', 'warning'); return; }
             log('开始填充缓冲区测试...', 'info');
-            const exports = wasmInstance.exports;
-            
+
             try {
                 const size = 1000;
                 const value = 0x55;
-                
-                // offset 和 size 都是 usize，需要 BigInt
-                exports.wasm64_fill_buffer(BigInt(0), BigInt(size), value);
+
+                // ✨ 无需 BigInt() 包装！
+                wasm.exports.fill_buffer(0, size, value);
                 log(`✅ 已填充 ${size} 字节，值为 0x${value.toString(16)}`, 'success');
-                
-                // 验证几个位置
+
                 for (let i = 0; i < 5; i++) {
                     const offset = Math.floor(Math.random() * size);
-                    const read = exports.wasm64_read_buffer(BigInt(offset));
+                    const read = wasm.exports.read_buffer(offset);
                     if (read !== value) {
                         log(`❌ 验证失败：偏移 ${offset} 处期望 ${value}, 实际 ${read}`, 'error');
                         return;
@@ -393,31 +349,23 @@
             } catch (error) {
                 log(`❌ 测试失败: ${error.message}`, 'error');
             }
-        }
+        };
 
-        // 校验和测试
-        function testChecksum() {
-            if (!wasmInstance) {
-                log('⚠️ WASM 未加载', 'warning');
-                return;
-            }
-
+        window.testChecksum = function () {
+            if (!wasm) { log('⚠️ WASM 未加载', 'warning'); return; }
             log('开始校验和计算测试...', 'info');
-            const exports = wasmInstance.exports;
-            
+
             try {
                 const size = 1000;
                 const value = 0xAA;
-                
-                // fill_buffer 参数需要 BigInt
-                exports.wasm64_fill_buffer(BigInt(0), BigInt(size), value);
-                // checksum_buffer 参数和返回值都可能是 BigInt
-                const checksum = Number(exports.wasm64_checksum_buffer(BigInt(0), BigInt(size)));
+
+                wasm.exports.fill_buffer(0, size, value);
+                const checksum = Number(wasm.exports.checksum_buffer(0, size));
                 const expected = value * size;
-                
+
                 log(`计算的校验和: ${checksum}`, 'info');
                 log(`期望的校验和: ${expected}`, 'info');
-                
+
                 if (checksum === expected) {
                     log(`✅ 校验和测试通过`, 'success');
                 } else {
@@ -426,27 +374,21 @@
             } catch (error) {
                 log(`❌ 测试失败: ${error.message}`, 'error');
             }
-        }
+        };
 
-        // 内存增长测试
-        function testMemoryGrow() {
-            if (!wasmInstance) {
-                log('⚠️ WASM 未加载', 'warning');
-                return;
-            }
-
+        window.testMemoryGrow = function () {
+            if (!wasm) { log('⚠️ WASM 未加载', 'warning'); return; }
             log('开始内存增长测试...', 'info');
-            const exports = wasmInstance.exports;
-            
+
             try {
-                const beforePages = Number(exports.wasm64_get_memory_size());
+                const beforePages = Number(wasm.exports.get_memory_size());
                 log(`增长前: ${beforePages} 页`, 'info');
-                
-                const delta = 10; // 增长 10 页 (640KB)
-                const result = Number(exports.wasm64_grow_memory(BigInt(delta)));
-                
+
+                const delta = 10;
+                const result = Number(wasm.exports.grow_memory(delta));
+
                 if (result >= 0) {
-                    const afterPages = Number(exports.wasm64_get_memory_size());
+                    const afterPages = Number(wasm.exports.get_memory_size());
                     log(`✅ 内存增长成功`, 'success');
                     log(`增长后: ${afterPages} 页 (+${afterPages - beforePages} 页)`, 'success');
                     updateSystemInfo();
@@ -456,31 +398,23 @@
             } catch (error) {
                 log(`❌ 测试失败: ${error.message}`, 'error');
             }
-        }
+        };
 
-        // 高地址访问测试
-        function testHighAddress() {
-            if (!wasmInstance) {
-                log('⚠️ WASM 未加载', 'warning');
-                return;
-            }
-
+        window.testHighAddress = function () {
+            if (!wasm) { log('⚠️ WASM 未加载', 'warning'); return; }
             log('开始高地址访问测试 (>4GB)...', 'info');
-            const exports = wasmInstance.exports;
-            
+
             try {
                 const testValue = 0xDEADBEEFCAFEBABEn;
-                // 参数是 u64，已经是 BigInt
-                const writeSuccess = exports.wasm64_write_at_high_address(testValue);
-                
+                const writeSuccess = wasm.exports.write_at_high_address(testValue);
+
                 if (writeSuccess) {
-                    const readValue = exports.wasm64_read_at_high_address();
-                    // BigInt 比较和显示（处理有符号/无符号问题）
+                    const readValue = wasm.exports.read_at_high_address();
                     const readValueUnsigned = readValue < 0n ? readValue + (1n << 64n) : readValue;
                     if (readValueUnsigned === testValue) {
                         log(`✅ 高地址访问成功: 0x${testValue.toString(16)}`, 'success');
                     } else {
-                        log(`❌ 读写不匹配: 写入 0x${testValue.toString(16)}, 读取 0x${readValueUnsigned.toString(16)}`, 'error');
+                        log(`❌ 读写不匹配`, 'error');
                     }
                 } else {
                     log(`⚠️ 高地址访问不支持（可能是 wasm32 或内存限制）`, 'warning');
@@ -488,44 +422,39 @@
             } catch (error) {
                 log(`❌ 测试失败: ${error.message}`, 'error');
             }
-        }
+        };
 
-        // 完整测试套件
-        function runFullTest() {
-            if (!wasmInstance) {
-                log('⚠️ WASM 未加载', 'warning');
-                return;
-            }
-
+        window.runFullTest = function () {
+            if (!wasm) { log('⚠️ WASM 未加载', 'warning'); return; }
             log('========== 开始完整测试套件 ==========', 'info');
-            const exports = wasmInstance.exports;
-            
+
             try {
-                const result = Number(exports.wasm64_run_memory_test());
-                
+                const result = Number(wasm.exports.run_memory_test());
+
                 log(`测试结果代码: 0x${result.toString(16)}`, 'info');
-                
+
                 if (result & 0x1) {
                     log(`✅ 填充和校验和测试通过`, 'success');
                 } else {
                     log(`❌ 填充和校验和测试失败`, 'error');
                 }
-                
+
                 if (result & 0x2) {
                     log(`✅ 高地址访问测试通过`, 'success');
                 } else {
                     log(`⚠️ 高地址访问测试跳过`, 'warning');
                 }
-                
+
                 log('========== 完整测试完成 ==========', 'success');
                 updateSystemInfo();
             } catch (error) {
                 log(`❌ 测试失败: ${error.message}`, 'error');
             }
-        }
+        };
 
         // 页面加载时初始化
-        window.addEventListener('load', initWasm);
+        init();
     </script>
 </body>
+
 </html>

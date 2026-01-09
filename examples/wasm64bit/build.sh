@@ -72,6 +72,14 @@ if [ "$choice" = "2" ]; then
     mkdir -p www/pkg
     cp ../../target/wasm64-unknown-unknown/release/autozig_wasm64bit.wasm www/pkg/
     
+    # 复制 TypeScript 绑定文件（如果存在）
+    BUILD_OUT_DIR=$(find ../../target/wasm64-unknown-unknown/release/build/autozig-wasm64bit-*/out -maxdepth 0 2>/dev/null | head -1)
+    if [ -n "$BUILD_OUT_DIR" ] && [ -f "$BUILD_OUT_DIR/bindings.d.ts" ]; then
+        cp "$BUILD_OUT_DIR/bindings.d.ts" www/pkg/
+        cp "$BUILD_OUT_DIR/bindings.js" www/pkg/
+        echo "   ✅ TypeScript 绑定已复制: bindings.d.ts, bindings.js"
+    fi
+    
     echo "   ✅ WASM 文件已复制到 www/pkg/"
     echo "   ℹ️  使用手动绑定：无需 wasm-bindgen 处理"
     

@@ -11,7 +11,64 @@ const builtin = @import("builtin");
 
 // 大内存缓冲区（演示 64-bit 地址空间）
 // 在 wasm64 模式下，可以分配超过 4GB 的内存
-var large_buffer: [16 * 1024 * 1024]u8 = undefined; // 16MB 缓冲区
+// 注意：为了避免编译器限制和生成巨大的二进制文件，
+// 我们定义一个较小的静态缓冲区，高地址访问通过动态指针演示
+var large_buffer: [16 * 1024 * 1024]u8 = undefined;
+
+/// 运行内存测试
+/// @return 测试结果位掩码
+/// Bit 0 (0x1): 低地址读写测试通过
+/// Bit 1 (0x2): 高地址 (>4GB) 读写测试通过
+export fn run_memory_test() u32 {
+    var result: u32 = 0;
+
+    // 1. 低地址测试
+    if (large_buffer.len >= 4) {
+        large_buffer[0] = 0xAA;
+        large_buffer[1] = 0xBB;
+        large_buffer[2] = 0xCC;
+        large_buffer[3] = 0xDD;
+
+        if (large_buffer[0] == 0xAA and
+            large_buffer[1] == 0xBB and
+            large_buffer[2] == 0xCC and
+            large_buffer[3] == 0xDD)
+        {
+            result |= 0x1;
+        }
+    }
+
+    // 2. 高地址测试 (>4GB)
+    // 检查当前内存大小 (在 wasm64 中 usize 是 64 位)
+    const page_size: usize = 64 * 1024;
+    const target_addr: usize = 4 * 1024 * 1024 * 1024 + page_size; // 4GB + 64KB
+    const required_pages = (target_addr / page_size) + 1;
+
+    // 如果内存不足，尝试增长
+    var current_pages = @wasmMemorySize(0);
+    if (current_pages < required_pages) {
+        // 尝试增长到所需大小
+        const needed = required_pages - current_pages;
+        // 如果增长失败，我们只能跳过此测试
+        if (@wasmMemoryGrow(0, needed) == -1) {
+            return result;
+        }
+    }
+
+    // 更新当前页面数并测试
+    current_pages = @wasmMemorySize(0);
+    if (current_pages * page_size > target_addr) {
+        // 使用 @ptrFromInt 创建指针访问高地址
+        // 这绕过了静态数组索引检查
+        const ptr = @as(*u8, @ptrFromInt(target_addr));
+        ptr.* = 0x55;
+        if (ptr.* == 0x55) {
+            result |= 0x2;
+        }
+    }
+
+    return result;
+}
 
 /// 获取当前 WASM 内存大小（以 64KB 页为单位）
 /// 在 wasm64 模式下返回 64-bit 地址

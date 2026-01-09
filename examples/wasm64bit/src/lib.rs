@@ -74,27 +74,23 @@ include_zig!("src/wasm64.zig", {
     fn run_memory_test() -> u32;
 });
 
-/// 格式化测试结果（可选的包装器）
+// 以下函数仅用于非 WASM 目标
+// 对于 WASM，JavaScript 通过 bindings.js 直接调用 Zig 导出
+
+/// 格式化测试结果（仅非 WASM 目标）
+#[cfg(not(target_family = "wasm"))]
 #[wasm_bindgen]
 pub fn run_memory_test_formatted() -> String {
     let result = wasm_run_memory_test();
-    let arch = wasm_get_arch_info();
-    let start_size = wasm_get_memory_size();
-    let buffer_size = wasm_get_buffer_size();
-
     format!(
-        "WASM{} Memory Test:\nMemory: {} pages\nBuffer: {} bytes\nTest Result: 0x{:X}\n  \
-         Checksum: {}\n  High Address: {}",
-        arch,
-        start_size,
-        buffer_size,
+        "Memory Test Result: 0x{:08X}\n- Fill/Checksum: {}\n- High Address: {}",
         result,
         if result & 0x1 != 0 { "PASS" } else { "FAIL" },
         if result & 0x2 != 0 { "PASS" } else { "SKIP" }
     )
 }
 
-/// 初始化
+// Optional: panic hook for debugging in browser console
 #[wasm_bindgen(start)]
 pub fn init() {
     #[cfg(feature = "console_error_panic_hook")]
@@ -103,20 +99,24 @@ pub fn init() {
 
 #[cfg(test)]
 mod tests {
+    // Tests only work on non-WASM targets
+    #[cfg(not(target_family = "wasm"))]
     use super::*;
 
     #[test]
+    #[cfg(not(target_family = "wasm"))]
     fn test_arch_info() {
-        let arch = wasm_get_arch_info();
+        let arch = get_arch_info();
         assert!(arch == 32 || arch == 64);
     }
 
     #[test]
+    #[cfg(not(target_family = "wasm"))]
     fn test_buffer_operations() {
-        let size = wasm_get_buffer_size();
+        let size = get_buffer_size();
         assert!(size > 0);
 
-        wasm_write_buffer(0, 42);
-        assert_eq!(wasm_read_buffer(0), 42);
+        write_buffer(0, 42);
+        assert_eq!(read_buffer(0), 42);
     }
 }

@@ -731,12 +731,16 @@ pub fn include_zig(input: TokenStream) -> TokenStream {
             #struct_defs
 
             // Raw FFI module with extern "C" declarations (unique name per file)
+            // For WASM targets, skip FFI - Zig exports directly, JS calls them
+            #[cfg(not(target_family = "wasm"))]
             mod #mod_name_ident {
                 use super::*;
                 #ffi_decls
             }
 
-            // Safe wrappers
+            // Safe wrappers - only for non-WASM targets
+            // For WASM, JavaScript directly calls Zig exports via bindings.js
+            #[cfg(not(target_family = "wasm"))]
             #wrappers
         }
     } else {
@@ -1318,6 +1322,7 @@ fn generate_dual_binding_wrappers(
     if strategy == "dual" || strategy == "bindgen" {
         let export_name = quote::format_ident!("{}{}", prefix_bindgen, fn_name);
         wrappers.push(quote! {
+            #[cfg(not(target_family = "wasm"))]
             #[wasm_bindgen::prelude::wasm_bindgen]
             pub fn #export_name(#inputs) #output {
                 unsafe {
@@ -1354,6 +1359,7 @@ fn generate_dual_binding_wrappers(
         };
 
         wrappers.push(quote! {
+            #[cfg(not(target_family = "wasm"))]
             #[no_mangle]
             pub extern "C" fn #export_name(#inputs) #ret_type {
                 #body

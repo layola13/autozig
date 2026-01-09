@@ -27,6 +27,7 @@ use sha2::{
 };
 
 pub mod scanner;
+pub mod ts_generator;
 pub mod type_mapper;
 pub mod zig_compiler;
 
@@ -243,8 +244,48 @@ impl AutoZigEngine {
         let compiler = ZigCompiler::new();
         compiler.compile_with_buildzig(&build_file, &self.out_dir, &lib_path)?;
 
+        // Generate TypeScript bindings for WASM targets
+        let rust_target = env::var("TARGET").unwrap_or_else(|_| "native".to_string());
+        if rust_target.contains("wasm") {
+            // Force export of Zig functions for WASM targets
+            // This is critical because we use +whole-archive but without explicit exports,
+            // wasm-ld might still strip symbols or not expose them to the outside world.
+            // Since we disabled the Rust wrappers for WASM (to avoid import loops),
+            // the Javascript side needs to call these Zig exports directly.
+            self.force_wasm_exports()?;
+
+            self.generate_ts_bindings(&rust_target)?;
+        }
+
         self.link_library();
         Ok(BuildOutput { lib_path: Some(lib_path) })
+    }
+
+    /// Force export of Zig functions for WASM targets
+    fn force_wasm_exports(&self) -> Result<()> {
+        use ts_generator::FunctionSignature;
+
+        // Scan Rust source files for function declarations
+        let function_decls = self.extract_function_declarations()?;
+
+        if function_decls.is_empty() {
+            return Ok(());
+        }
+
+        let mut export_count = 0;
+        for decl in function_decls {
+            if let Some(sig) = FunctionSignature::parse(&decl) {
+                // Emit linker argument to force export
+                println!("cargo:rustc-link-arg=--export={}", sig.name);
+                export_count += 1;
+            }
+        }
+
+        if export_count > 0 {
+            println!("cargo:warning=Forced export of {} functions for WASM", export_count);
+        }
+
+        Ok(())
     }
 
     /// Generate main module with @import statements
@@ -516,7 +557,140 @@ impl AutoZigEngine {
     /// Link the static library
     fn link_library(&self) {
         println!("cargo:rustc-link-search=native={}", self.out_dir.display());
-        println!("cargo:rustc-link-lib=static=autozig");
+
+        // For WASM targets, use +whole-archive to force inclusion of all symbols
+        // Without this, wasm-ld only includes referenced symbols, but extern "C"
+        // declarations become imports instead of references
+        let target = env::var("TARGET").unwrap_or_default();
+        if target.contains("wasm") {
+            // Use +whole-archive modifier (Cargo 1.61+)
+            println!("cargo:rustc-link-lib=static:+whole-archive=autozig");
+        } else {
+            println!("cargo:rustc-link-lib=static=autozig");
+        }
+    }
+
+    /// Generate TypeScript bindings (.d.ts and .js files) for WASM modules
+    fn generate_ts_bindings(&self, target: &str) -> Result<()> {
+        use ts_generator::{
+            FunctionSignature,
+            TsConfig,
+            TsGenerator,
+        };
+
+        // Scan Rust source files for function declarations with #[autozig] attributes
+        let function_decls = self.extract_function_declarations()?;
+
+        if function_decls.is_empty() {
+            println!("cargo:warning=No functions found for TypeScript binding generation");
+            return Ok(());
+        }
+
+        // Configure TypeScript generation
+        let is_wasm64 = target.contains("wasm64");
+        let config = TsConfig {
+            is_wasm64,
+            module_name: "autozig".to_string(),
+            es_module: true,
+        };
+
+        // Parse function declarations
+        let functions: Vec<FunctionSignature> = function_decls
+            .iter()
+            .filter_map(|decl| FunctionSignature::parse(decl))
+            .collect();
+
+        if functions.is_empty() {
+            println!("cargo:warning=No parseable functions for TypeScript binding generation");
+            return Ok(());
+        }
+
+        println!("cargo:warning=Generating TypeScript bindings for {} functions", functions.len());
+
+        // Generate TypeScript declaration file
+        let generator = TsGenerator::new(functions, config);
+        let dts_content = generator.generate_dts();
+        let js_content = generator.generate_js_loader();
+
+        // Write files
+        let dts_path = self.out_dir.join("bindings.d.ts");
+        let js_path = self.out_dir.join("bindings.js");
+
+        fs::write(&dts_path, dts_content).context("Failed to write bindings.d.ts")?;
+        fs::write(&js_path, js_content).context("Failed to write bindings.js")?;
+
+        println!("cargo:warning=Generated TypeScript bindings: bindings.d.ts, bindings.js");
+
+        Ok(())
+    }
+
+    /// Extract function declarations from Rust source files
+    /// Looks for functions with #[autozig(...)] attributes in include_zig!
+    /// macros
+    fn extract_function_declarations(&self) -> Result<Vec<String>> {
+        let mut declarations = Vec::new();
+
+        // Walk through Rust source files
+        for entry in walkdir::WalkDir::new(&self.src_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().map_or(false, |ext| ext == "rs"))
+        {
+            let content = fs::read_to_string(entry.path())?;
+
+            // Find include_zig! macro invocations and extract function declarations
+            self.extract_functions_from_content(&content, &mut declarations);
+        }
+
+        Ok(declarations)
+    }
+
+    /// Extract function declarations from file content
+    fn extract_functions_from_content(&self, content: &str, declarations: &mut Vec<String>) {
+        // Look for patterns like:
+        // #[autozig(strategy = "dual")]
+        // fn function_name(...) -> ...;
+
+        let lines: Vec<&str> = content.lines().collect();
+        let mut i = 0;
+
+        while i < lines.len() {
+            let line = lines[i].trim();
+
+            // Check for #[autozig(...)] attribute
+            if line.starts_with("#[autozig") {
+                let mut decl = line.to_string();
+                i += 1;
+
+                // Collect following lines until we hit the function signature
+                while i < lines.len() {
+                    let next_line = lines[i].trim();
+                    decl.push(' ');
+                    decl.push_str(next_line);
+
+                    // Check if we've reached the end of the function signature
+                    if next_line.ends_with(';') || next_line.ends_with('{') {
+                        // Remove the trailing brace if present
+                        let decl = decl.trim_end_matches('{').trim().to_string();
+                        declarations.push(decl);
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            i += 1;
+        }
+
+        // Also extract wasm64_ prefixed functions from extern "C" declarations
+        for line in content.lines() {
+            let line = line.trim();
+            if line.contains("wasm64_")
+                && (line.starts_with("pub extern") || line.starts_with("#[no_mangle]"))
+            {
+                // Skip, these are generated functions
+                continue;
+            }
+        }
     }
 }
 
