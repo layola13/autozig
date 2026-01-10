@@ -731,16 +731,12 @@ pub fn include_zig(input: TokenStream) -> TokenStream {
             #struct_defs
 
             // Raw FFI module with extern "C" declarations (unique name per file)
-            // For WASM targets, skip FFI - Zig exports directly, JS calls them
-            #[cfg(not(target_family = "wasm"))]
             mod #mod_name_ident {
                 use super::*;
                 #ffi_decls
             }
 
-            // Safe wrappers - only for non-WASM targets
-            // For WASM, JavaScript directly calls Zig exports via bindings.js
-            #[cfg(not(target_family = "wasm"))]
+            // Safe wrappers
             #wrappers
         }
     } else {
@@ -824,6 +820,7 @@ fn generate_ffi_declarations_for_include(config: &IncludeZigConfig) -> proc_macr
         }
 
         decls.push(quote! {
+            #[link(name = "autozig")]
             extern "C" {
                 pub fn #fn_name(#(#ffi_params),*) #output;
             }

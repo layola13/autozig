@@ -66,8 +66,8 @@ impl ZigCompiler {
             }
         }
 
-        // 检测是否为 WASM 目标
-        let is_wasm = target.contains("wasm32");
+        // 检测是否为 WASM 目标（支持 wasm32 和 wasm64）
+        let is_wasm = target.contains("wasm32") || target.contains("wasm64");
 
         // zig build-lib source.zig -static -femit-bin=output.a -target <target>
         let mut cmd = Command::new(&self.zig_path);
@@ -155,8 +155,8 @@ impl ZigCompiler {
             }
         }
 
-        // 检测是否为 WASM 目标
-        let is_wasm = target.contains("wasm32");
+        // 检测是否为 WASM 目标（支持 wasm32 和 wasm64）
+        let is_wasm = target.contains("wasm32") || target.contains("wasm64");
 
         let mut cmd = Command::new(&self.zig_path);
         cmd.arg("build-lib")

@@ -109,7 +109,10 @@ impl AutoZigEngine {
 
         let code_hash = format!("{:x}", Sha256::digest(&complete_code));
         let hash_file = self.out_dir.join(".zig_code_hash");
-        let lib_path = self.out_dir.join("libautozig.a");
+
+        let pkg_name = env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "autozig".to_string());
+        let lib_name = pkg_name.replace("-", "_");
+        let lib_path = self.out_dir.join(format!("lib{}.a", lib_name));
 
         if hash_file.exists() && lib_path.exists() {
             if let Ok(old_hash) = fs::read_to_string(&hash_file) {
@@ -175,7 +178,10 @@ impl AutoZigEngine {
         fs::write(&main_file, &main_zig).context("Failed to write main module")?;
 
         // Compile main module
-        let lib_path = self.out_dir.join("libautozig.a");
+
+        let pkg_name = env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "autozig".to_string());
+        let lib_name = pkg_name.replace("-", "_");
+        let lib_path = self.out_dir.join(format!("lib{}.a", lib_name));
         let rust_target = env::var("TARGET").unwrap_or_else(|_| "native".to_string());
         let zig_target = rust_to_zig_target(&rust_target);
 
@@ -240,7 +246,10 @@ impl AutoZigEngine {
         fs::write(&build_file, &build_zig).context("Failed to write build.zig")?;
 
         // Compile using build.zig
-        let lib_path = self.out_dir.join("libautozig.a");
+
+        let pkg_name = env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "autozig".to_string());
+        let lib_name = pkg_name.replace("-", "_");
+        let lib_path = self.out_dir.join(format!("lib{}.a", lib_name));
         let compiler = ZigCompiler::new();
         compiler.compile_with_buildzig(&build_file, &self.out_dir, &lib_path)?;
 
@@ -491,7 +500,20 @@ impl AutoZigEngine {
         }
 
         build.push_str("    });\n");
-        build.push_str("    const optimize = b.standardOptimizeOption(.{});\n\n");
+
+        // WASM64 FIX: Force ReleaseFast for WASM to avoid Thread/POSIX errors
+        // In Debug mode, std.ArrayList and std.AutoHashMap use Thread.getCurrentId()
+        // and POSIX calls which are unavailable in freestanding WASM
+        // environment
+        if is_wasm {
+            build.push_str(
+                "    // Force ReleaseFast for WASM to bypass Debug-mode Thread/POSIX \
+                 requirements\n",
+            );
+            build.push_str("    const optimize = std.builtin.OptimizeMode.ReleaseFast;\n\n");
+        } else {
+            build.push_str("    const optimize = b.standardOptimizeOption(.{});\n\n");
+        }
 
         // Create module first (required by Zig 0.15.2 API)
         build.push_str("    const mod = b.addModule(\"autozig\", .{\n");
@@ -564,9 +586,13 @@ impl AutoZigEngine {
         let target = env::var("TARGET").unwrap_or_default();
         if target.contains("wasm") {
             // Use +whole-archive modifier (Cargo 1.61+)
-            println!("cargo:rustc-link-lib=static:+whole-archive=autozig");
+            let pkg_name = env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "autozig".to_string());
+            let lib_name = pkg_name.replace("-", "_");
+            println!("cargo:rustc-link-lib=static:+whole-archive={}", lib_name);
         } else {
-            println!("cargo:rustc-link-lib=static=autozig");
+            let pkg_name = env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "autozig".to_string());
+            let lib_name = pkg_name.replace("-", "_");
+            println!("cargo:rustc-link-lib=static={}", lib_name);
         }
     }
 
