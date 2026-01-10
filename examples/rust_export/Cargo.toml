@@ -1,0 +1,25 @@
+[package]
+name = "autozig-rust-export"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+# 独立的workspace，不继承父级
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+autozig = { path = "../.." }
+
+[build-dependencies]
+autozig-build = { path = "../../gen/build" }
+anyhow = "1.0"
+
+[profile.release]
+opt-level = "z"
+lto = false
+codegen-units = 1
+
+# 编译命令（wasm64需要nightly + build-std）：
+# cargo +nightly build --target wasm64-unknown-unknown -Z build-std=std,panic_abort --release

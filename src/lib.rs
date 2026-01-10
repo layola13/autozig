@@ -46,7 +46,10 @@
 
 /// Re-export the procedural macros
 pub use autozig_macro::autozig;
-pub use autozig_macro::include_zig;
+pub use autozig_macro::{
+    autozig_export,
+    include_zig,
+};
 
 /// Stream support for async Zig FFI
 #[cfg(feature = "stream")]

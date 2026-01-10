@@ -2,8 +2,10 @@
 //!
 //! 演示如何使用 AutoZig 在 WASM 环境中调用 Zig 代码进行高性能图像处理
 
-use autozig::autozig;
-use wasm_bindgen::prelude::*;
+use autozig::{
+    autozig,
+    autozig_export,
+};
 
 // 使用 autozig! 宏嵌入 Zig 代码
 autozig! {
@@ -92,21 +94,21 @@ autozig! {
 // 暴露给 JavaScript 的 WASM 接口
 
 /// 反色滤镜
-#[wasm_bindgen]
+#[autozig_export]
 pub fn apply_invert(mut data: Vec<u8>) -> Vec<u8> {
     invert_colors_raw(data.as_mut_ptr(), data.len());
     data
 }
 
 /// 灰度滤镜
-#[wasm_bindgen]
+#[autozig_export]
 pub fn apply_grayscale(mut data: Vec<u8>) -> Vec<u8> {
     grayscale_raw(data.as_mut_ptr(), data.len());
     data
 }
 
 /// 亮度调整
-#[wasm_bindgen]
+#[autozig_export]
 pub fn apply_brightness(mut data: Vec<u8>, delta: i32) -> Vec<u8> {
     adjust_brightness_raw(data.as_mut_ptr(), data.len(), delta);
     data
@@ -117,7 +119,7 @@ pub fn apply_brightness(mut data: Vec<u8>, delta: i32) -> Vec<u8> {
 // ============================================================================
 
 /// Rust Native: 反色滤镜
-#[wasm_bindgen]
+#[autozig_export]
 pub fn apply_invert_rust(mut data: Vec<u8>) -> Vec<u8> {
     for i in (0..data.len()).step_by(4) {
         data[i] = 255 - data[i]; // R
@@ -129,7 +131,7 @@ pub fn apply_invert_rust(mut data: Vec<u8>) -> Vec<u8> {
 }
 
 /// Rust Native: 灰度滤镜
-#[wasm_bindgen]
+#[autozig_export]
 pub fn apply_grayscale_rust(mut data: Vec<u8>) -> Vec<u8> {
     for i in (0..data.len()).step_by(4) {
         let r = data[i] as u32;
@@ -147,7 +149,7 @@ pub fn apply_grayscale_rust(mut data: Vec<u8>) -> Vec<u8> {
 }
 
 /// Rust Native: 亮度调整
-#[wasm_bindgen]
+#[autozig_export]
 pub fn apply_brightness_rust(mut data: Vec<u8>, delta: i32) -> Vec<u8> {
     for i in (0..data.len()).step_by(4) {
         data[i] = clamp_add_rust(data[i], delta);
@@ -164,13 +166,13 @@ fn clamp_add_rust(value: u8, delta: i32) -> u8 {
 }
 
 /// 获取版本信息
-#[wasm_bindgen]
+#[autozig_export]
 pub fn get_version() -> String {
     "AutoZig WASM Filter v0.1.0 - Powered by Zig + Rust".to_string()
 }
 
 // 初始化函数（可选）
-#[wasm_bindgen(start)]
+#[autozig_export]
 pub fn init() {
     // 设置 panic hook 以便在浏览器控制台看到错误
     #[cfg(feature = "console_error_panic_hook")]

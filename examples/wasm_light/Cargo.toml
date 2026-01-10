@@ -8,7 +8,6 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 autozig = { path = "../.." }
-wasm-bindgen = "0.2"
 
 [build-dependencies]
 autozig-build = { path = "../../gen/build" }

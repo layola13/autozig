@@ -183,6 +183,66 @@ pub fn build_tests(zig_dir: impl Into<PathBuf>) -> Result<Vec<PathBuf>> {
     Ok(test_executables)
 }
 
+/// Generate TypeScript bindings from Rust functions marked with
+/// #[autozig_export]
+///
+/// This function scans Rust source files for functions marked with the
+/// `#[autozig_export]` attribute and generates TypeScript declaration files
+/// and JavaScript loader code for WASM interop.
+///
+/// # Arguments
+/// * `src_dir` - The source directory to scan for #[autozig_export] functions
+///
+/// # Example
+///
+/// ```rust,no_run
+/// // In build.rs:
+/// fn main() -> anyhow::Result<()> {
+///     autozig_build::build("src")?;
+///     autozig_build::generate_typescript_bindings_for_rust_exports("src")?;
+///     Ok(())
+/// }
+/// ```
+pub fn generate_typescript_bindings_for_rust_exports(src_dir: impl Into<PathBuf>) -> Result<()> {
+    let src_dir = src_dir.into();
+    let out_dir = env::var("OUT_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("target/debug/build"));
+
+    let engine = AutoZigEngine::with_mode(&src_dir, &out_dir, CompilationMode::default());
+    engine.generate_typescript_bindings_for_rust_exports()?;
+
+    Ok(())
+}
+
+/// Convenience function for WASM projects: build Zig code + generate TypeScript
+/// bindings
+///
+/// This combines `build()` and
+/// `generate_typescript_bindings_for_rust_exports()` into a single call,
+/// perfect for WASM projects using #[autozig_export].
+///
+/// # Example
+///
+/// ```rust,no_run
+/// // In build.rs for WASM projects:
+/// fn main() -> anyhow::Result<()> {
+///     autozig_build::build_wasm_with_bindings("src")?;
+///     Ok(())
+/// }
+/// ```
+pub fn build_wasm_with_bindings(src_dir: impl Into<PathBuf>) -> Result<BuildOutput> {
+    let src_dir = src_dir.into();
+
+    // Build Zig code first
+    let output = build(&src_dir)?;
+
+    // Generate TypeScript bindings for #[autozig_export] functions
+    generate_typescript_bindings_for_rust_exports(&src_dir)?;
+
+    Ok(output)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

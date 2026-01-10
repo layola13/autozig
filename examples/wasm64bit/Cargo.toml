@@ -8,8 +8,6 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 autozig = { path = "../.." }
-wasm-bindgen = "0.2.106"
-# 同时支持 wasm-bindgen 和手动 C 风格导出
 
 [build-dependencies]
 autozig-build = { path = "../../gen/build" }
@@ -26,7 +24,4 @@ opt-level = 3
 
 # 编译命令（wasm64是tier-3 target，需要build-std）：
 # rustup component add rust-src
-# cargo build --target wasm64-unknown-unknown -Z build-std=std,panic_abort --release
-#
-# 或使用wasm32（更稳定）:
-# wasm-pack build --target web --out-dir www/pkg --release
+# cargo +nightly build --target wasm64-unknown-unknown -Z build-std=std,panic_abort --release

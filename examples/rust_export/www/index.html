@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoZig Rust Export Demo</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            opacity: 0.8;
+            margin-bottom: 30px;
+        }
+        .demo-section {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .demo-section h2 {
+            margin-top: 0;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+            padding-bottom: 10px;
+        }
+        .test-result {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            margin-top: 10px;
+        }
+        .success {
+            color: #4ade80;
+        }
+        .error {
+            color: #f87171;
+        }
+        button {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🦀 AutoZig Rust Export Demo</h1>
+        <p class="subtitle">
+            Direct Rust → WASM64 → TypeScript bindings<br>
+            <span class="badge">No wasm-bindgen</span>
+            <span class="badge">No Zig wrappers</span>
+            <span class="badge">#[autozig_export]</span>
+        </p>
+
+        <div class="demo-section">
+            <h2>📊 Function Tests</h2>
+            <button onclick="runTests()">Run All Tests</button>
+            <div id="results" class="test-result">
+                Click "Run All Tests" to test the exported Rust functions...
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>📝 Exported Functions</h2>
+            <ul id="function-list">
+                <li><code>add(a: i32, b: i32) -> i32</code></li>
+                <li><code>multiply(a: i32, b: i32) -> i32</code></li>
+                <li><code>get_version() -> u32</code></li>
+                <li><code>square(x: i32) -> i32</code></li>
+                <li><code>is_even(n: i32) -> bool</code></li>
+            </ul>
+        </div>
+
+        <div class="demo-section">
+            <h2>ℹ️ Implementation Details</h2>
+            <ul>
+                <li>✅ Pure Rust implementation (no Zig)</li>
+                <li>✅ WASM64 target compilation</li>
+                <li>✅ Automatic TypeScript binding generation</li>
+                <li>✅ Type-safe JavaScript wrapper</li>
+                <li>✅ Uses <code>#[autozig_export]</code> macro</li>
+            </ul>
+        </div>
+    </div>
+
+    <script type="module">
+        import { loadWasm } from './bindings.js';
+
+        let wasmModule = null;
+
+        async function initWasm() {
+            try {
+                wasmModule = await loadWasm('./autozig_rust_export.wasm');
+                console.log('✅ WASM module loaded successfully');
+                console.log('Exports:', Object.keys(wasmModule.exports));
+                return true;
+            } catch (error) {
+                console.error('❌ Failed to load WASM:', error);
+                document.getElementById('results').innerHTML = 
+                    `<span class="error">Failed to load WASM: ${error.message}</span>`;
+                return false;
+            }
+        }
+
+        window.runTests = async function() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<span>Loading WASM module...</span>';
+
+            if (!wasmModule) {
+                const success = await initWasm();
+                if (!success) return;
+            }
+
+            const tests = [
+                {
+                    name: 'add(10, 32)',
+                    fn: () => wasmModule.exports.add(10, 32),
+                    expected: 42
+                },
+                {
+                    name: 'multiply(6, 7)',
+                    fn: () => wasmModule.exports.multiply(6, 7),
+                    expected: 42
+                },
+                {
+                    name: 'get_version()',
+                    fn: () => wasmModule.exports.get_version(),
+                    expected: 100
+                },
+                {
+                    name: 'square(9)',
+                    fn: () => wasmModule.exports.square(9),
+                    expected: 81
+                },
+                {
+                    name: 'is_even(42)',
+                    fn: () => wasmModule.exports.is_even(42),
+                    expected: true
+                },
+                {
+                    name: 'is_even(43)',
+                    fn: () => wasmModule.exports.is_even(43),
+                    expected: false
+                }
+            ];
+
+            let html = '<strong>Test Results:</strong><br><br>';
+            let passed = 0;
+            let failed = 0;
+
+            for (const test of tests) {
+                try {
+                    const result = test.fn();
+                    const success = result === test.expected;
+                    
+                    if (success) {
+                        html += `<span class="success">✅ ${test.name} = ${result}</span><br>`;
+                        passed++;
+                    } else {
+                        html += `<span class="error">❌ ${test.name} = ${result} (expected ${test.expected})</span><br>`;
+                        failed++;
+                    }
+                } catch (error) {
+                    html += `<span class="error">❌ ${test.name} threw error: ${error.message}</span><br>`;
+                    failed++;
+                }
+            }
+
+            html += `<br><strong>Summary: ${passed} passed, ${failed} failed</strong>`;
+            resultsDiv.innerHTML = html;
+        };
+
+        // Auto-load WASM on page load
+        initWasm();
+    </script>
+</body>
+</html>

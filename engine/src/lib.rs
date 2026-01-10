@@ -263,7 +263,11 @@ impl AutoZigEngine {
             // the Javascript side needs to call these Zig exports directly.
             self.force_wasm_exports()?;
 
+            // Generate TypeScript bindings for both Zig and Rust exports
             self.generate_ts_bindings(&rust_target)?;
+
+            // Also generate TypeScript bindings for #[autozig_export] Rust functions
+            self.generate_typescript_bindings_for_rust_exports()?;
         }
 
         self.link_library();
@@ -707,6 +711,9 @@ impl AutoZigEngine {
             i += 1;
         }
 
+        // Also extract #[autozig_export] functions (NEW)
+        self.extract_autozig_export_functions(content, declarations);
+
         // Also extract wasm64_ prefixed functions from extern "C" declarations
         for line in content.lines() {
             let line = line.trim();
@@ -717,6 +724,133 @@ impl AutoZigEngine {
                 continue;
             }
         }
+    }
+
+    /// Extract functions with #[autozig_export] attribute (NEW)
+    /// These are Rust functions that should be directly exported to WASM
+    fn extract_autozig_export_functions(&self, content: &str, declarations: &mut Vec<String>) {
+        let lines: Vec<&str> = content.lines().collect();
+        let mut i = 0;
+
+        while i < lines.len() {
+            let line = lines[i].trim();
+
+            // Check for #[autozig_export] attribute (exact match, not #[autozig(...)])
+            if line == "#[autozig_export]" {
+                i += 1;
+
+                // Collect the function signature
+                let mut fn_sig = String::new();
+                while i < lines.len() {
+                    let next_line = lines[i].trim();
+
+                    // Skip other attributes and visibility modifiers
+                    if next_line.starts_with("#[") || next_line.is_empty() {
+                        i += 1;
+                        continue;
+                    }
+
+                    // Found function declaration
+                    if next_line.starts_with("pub fn") || next_line.starts_with("fn") {
+                        fn_sig.push_str(next_line);
+
+                        // Continue collecting until we hit the opening brace
+                        while !fn_sig.contains('{') && i + 1 < lines.len() {
+                            i += 1;
+                            let continuation = lines[i].trim();
+                            fn_sig.push(' ');
+                            fn_sig.push_str(continuation);
+                        }
+
+                        // Remove the trailing brace and body
+                        let fn_sig = fn_sig.trim_end_matches('{').trim().to_string();
+
+                        // Convert to C-compatible signature for TypeScript binding generation
+                        // e.g., "pub fn my_func(a: i32) -> i32" becomes "fn my_func(a: i32) ->
+                        // i32;"
+                        let cleaned_sig = fn_sig.replace("pub fn", "fn").trim().to_string() + ";";
+                        declarations.push(cleaned_sig);
+                        break;
+                    }
+
+                    i += 1;
+                }
+            }
+            i += 1;
+        }
+    }
+
+    /// Public method to generate TypeScript bindings from #[autozig_export]
+    /// functions This is called from build.rs via autozig_build crate
+    pub fn generate_typescript_bindings_for_rust_exports(&self) -> Result<()> {
+        let rust_target = env::var("TARGET").unwrap_or_else(|_| "native".to_string());
+
+        // Only generate bindings for WASM targets
+        if !rust_target.contains("wasm") {
+            println!("cargo:warning=Skipping TypeScript bindings (not a WASM target)");
+            return Ok(());
+        }
+
+        // Extract #[autozig_export] functions
+        let mut declarations = Vec::new();
+        for entry in walkdir::WalkDir::new(&self.src_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().map_or(false, |ext| ext == "rs"))
+        {
+            let content = fs::read_to_string(entry.path())?;
+            self.extract_autozig_export_functions(&content, &mut declarations);
+        }
+
+        if declarations.is_empty() {
+            println!("cargo:warning=No #[autozig_export] functions found");
+            return Ok(());
+        }
+
+        println!("cargo:warning=Found {} #[autozig_export] functions", declarations.len());
+
+        // Generate TypeScript bindings using the same logic as generate_ts_bindings
+        use ts_generator::{
+            FunctionSignature,
+            TsConfig,
+            TsGenerator,
+        };
+
+        let is_wasm64 = rust_target.contains("wasm64");
+        let config = TsConfig {
+            is_wasm64,
+            module_name: "autozig".to_string(),
+            es_module: true,
+        };
+
+        // Parse function declarations
+        let functions: Vec<FunctionSignature> = declarations
+            .iter()
+            .filter_map(|decl| FunctionSignature::parse(decl))
+            .collect();
+
+        if functions.is_empty() {
+            println!("cargo:warning=No parseable #[autozig_export] functions");
+            return Ok(());
+        }
+
+        println!("cargo:warning=Generating TypeScript bindings for {} functions", functions.len());
+
+        // Generate TypeScript declaration file
+        let generator = TsGenerator::new(functions, config);
+        let dts_content = generator.generate_dts();
+        let js_content = generator.generate_js_loader();
+
+        // Write files
+        let dts_path = self.out_dir.join("bindings.d.ts");
+        let js_path = self.out_dir.join("bindings.js");
+
+        fs::write(&dts_path, dts_content).context("Failed to write bindings.d.ts")?;
+        fs::write(&js_path, js_content).context("Failed to write bindings.js")?;
+
+        println!("cargo:warning=Generated TypeScript bindings: bindings.d.ts, bindings.js");
+
+        Ok(())
     }
 }
 

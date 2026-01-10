@@ -366,12 +366,16 @@ impl TsGenerator {
             };
 
             // Check if any params need BigInt conversion
-            let needs_conversion = func
+            let needs_param_conversion = func
                 .params
                 .iter()
                 .any(|(_, ty)| ty.needs_bigint(self.config.is_wasm64));
 
-            if needs_conversion {
+            // Check if return type needs conversion (boolean or bigint)
+            let needs_return_conversion = matches!(func.return_type, RustType::Bool)
+                || func.return_type.needs_bigint(self.config.is_wasm64);
+
+            if needs_param_conversion || needs_return_conversion {
                 // Generate wrapper with conversion
                 let params: Vec<_> = func.params.iter().map(|(n, _)| n.as_str()).collect();
                 let params_str = params.join(", ");
@@ -389,24 +393,20 @@ impl TsGenerator {
                     .collect();
                 let args_str = converted_args.join(", ");
 
-                // Handle return type conversion (BigInt -> number if needed)
-                let ret_needs_bigint = func.return_type.needs_bigint(self.config.is_wasm64);
+                // Handle return type conversion
+                let call = format!("raw.{}({})", func.name, args_str);
+                let wrapped_call = match &func.return_type {
+                    RustType::Bool => format!("!!{}", call), // Convert i32 to boolean
+                    ty if ty.needs_bigint(self.config.is_wasm64) => call, // Keep as bigint
+                    _ => call,                               // No conversion needed
+                };
 
-                if ret_needs_bigint {
-                    writeln!(
-                        output,
-                        "    {}: ({}) => raw.{}({}){}",
-                        func.name, params_str, func.name, args_str, trailing_comma
-                    )
-                    .unwrap();
-                } else {
-                    writeln!(
-                        output,
-                        "    {}: ({}) => raw.{}({}){}",
-                        func.name, params_str, func.name, args_str, trailing_comma
-                    )
-                    .unwrap();
-                }
+                writeln!(
+                    output,
+                    "    {}: ({}) => {}{}",
+                    func.name, params_str, wrapped_call, trailing_comma
+                )
+                .unwrap();
             } else {
                 // Direct passthrough
                 writeln!(output, "    {}: raw.{}{}", func.name, func.name, trailing_comma).unwrap();

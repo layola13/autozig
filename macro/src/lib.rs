@@ -1733,6 +1733,61 @@ fn generate_with_monomorphization_for_include(
     (ffi_decls, wrappers)
 }
 
+/// `#[autozig_export]` attribute macro for exporting Rust functions to WASM
+///
+/// This macro allows Rust functions to be directly exported to WebAssembly
+/// and generates TypeScript bindings without requiring Zig wrappers or
+/// wasm-bindgen.
+///
+/// # Syntax
+///
+/// ```rust,ignore
+/// use autozig::autozig_export;
+///
+/// #[autozig_export]
+/// pub fn my_function(a: i32, b: i32) -> i32 {
+///     a + b
+/// }
+/// ```
+///
+/// The macro will:
+/// 1. Generate `#[no_mangle]` and `extern "C"` for WASM export
+/// 2. Collect function signature for TypeScript binding generation (via
+///    build.rs)
+/// 3. Support basic types: i32, u32, i64, u64, f32, f64, bool, ()
+///
+/// # Note
+/// TypeScript bindings (`.d.ts` and `.js`) are generated during build time
+/// by `autozig-build` scanning for this attribute.
+#[proc_macro_attribute]
+pub fn autozig_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input_fn = parse_macro_input!(item as syn::ItemFn);
+
+    // Extract function signature components
+    let fn_name = &input_fn.sig.ident;
+    let fn_inputs = &input_fn.sig.inputs;
+    let fn_output = &input_fn.sig.output;
+    let fn_block = &input_fn.block;
+    let fn_attrs = &input_fn.attrs;
+
+    // Generate ONLY the exported function with #[no_mangle] and extern "C"
+    // No need for a separate wrapper - the original function IS the exported
+    // function
+    let output = quote! {
+        // Preserve original attributes (like #[cfg], doc comments, etc.)
+        #(#fn_attrs)*
+
+        // Add marker comment for build.rs scanner to detect
+        #[doc = "@autozig_export"]
+
+        // Export as C-compatible function for WASM
+        #[no_mangle]
+        pub extern "C" fn #fn_name(#fn_inputs) #fn_output #fn_block
+    };
+
+    TokenStream::from(output)
+}
+
 #[cfg(test)]
 mod tests {
     // Proc macro tests would go here
