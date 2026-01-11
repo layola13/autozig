@@ -58,6 +58,9 @@ pub mod stream;
 /// Zero-copy buffer passing between Zig and Rust (Phase 4.2)
 pub mod zero_copy;
 
+/// Safe memory bridging types (ffi protocol)
+pub mod ffi_types;
+
 /// Common imports for using AutoZig
 pub mod prelude {
     pub use crate::{

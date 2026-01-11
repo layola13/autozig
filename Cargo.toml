@@ -56,7 +56,8 @@ members = [
     "examples/array_ffi",
     "examples/abi_test",
     "examples/ffi_allocator",
-    "examples/wasm64print"
+    "examples/wasm64print",
+    "examples/leak_test"
 ]
 
 [features]
