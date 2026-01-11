@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoZig WASM64 Print Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: white;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .info-box {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .info-box h2 {
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+
+        .info-box p {
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+
+        .feature-list {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .feature-list li {
+            padding: 8px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+
+        .feature-list li:before {
+            content: "✅";
+            position: absolute;
+            left: 0;
+        }
+
+        .test-section {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .test-section h2 {
+            margin-bottom: 20px;
+        }
+
+        .button-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 15px 25px;
+            font-size: 1em;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f87171 0%, #dc2626 100%);
+        }
+
+        .console-output {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            max-height: 400px;
+            overflow-y: auto;
+            color: #00ff00;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .console-output .log {
+            color: #00ff00;
+            margin: 5px 0;
+        }
+
+        .console-output .error {
+            color: #ff4444;
+            margin: 5px 0;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+        }
+
+        .status {
+            text-align: center;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .status.loading {
+            background: rgba(251, 191, 36, 0.2);
+            color: #fbbf24;
+        }
+
+        .status.ready {
+            background: rgba(74, 222, 128, 0.2);
+            color: #4ade80;
+        }
+
+        .status.error {
+            background: rgba(248, 113, 113, 0.2);
+            color: #f87171;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 AutoZig WASM64 Print Demo</h1>
+
+        <div id="status" class="status loading">
+            ⏳ 正在加载 WASM 模块...
+        </div>
+
+        <div class="info-box">
+            <h2>📖 关于本示例</h2>
+            <p>本示例展示如何在 WASM64 环境下使用 <code>console_log!</code> 宏解决 Rust 的 <code>print!</code> 无效问题。</p>
+            <ul class="feature-list">
+                <li><strong>Rust → Zig → JS</strong> 三层调用链</li>
+                <li>支持 <strong>WASM64 BigInt</strong> 指针</li>
+                <li><strong>零拷贝</strong>字符串传递</li>
+                <li>自动 <strong>panic hook</strong> 集成</li>
+                <li>完全<strong>类型安全</strong>的 FFI</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>🧪 测试函数</h2>
+            <div class="button-grid">
+                <button class="btn" onclick="testAdd()">➕ 测试加法</button>
+                <button class="btn" onclick="testFactorial()">🔢 测试阶乘</button>
+                <button class="btn" onclick="testGreet()">👋 测试问候</button>
+                <button class="btn" onclick="testSumArray()">📊 测试数组求和</button>
+                <button class="btn" onclick="testDivide()">➗ 测试除法</button>
+                <button class="btn btn-danger" onclick="testPanic()">💥 测试 Panic</button>
+            </div>
+
+            <div class="input-group">
+                <input type="text" id="nameInput" placeholder="输入名字进行问候测试" value="AutoZig">
+                <button class="btn" onclick="testGreetCustom()">自定义问候</button>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>📟 控制台输出</h2>
+            <p style="margin-bottom: 10px; opacity: 0.8;">
+                提示：打开浏览器开发者工具（F12）查看完整的控制台输出
+            </p>
+            <div id="consoleOutput" class="console-output">
+                <div class="log">>>> 等待 WASM 模块加载...</div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { loadAutoZigWasm } from './loader.js';
+
+        let wasmInstance = null;
+
+        // 拦截 console.log 和 console.error，显示在页面上
+        const consoleOutput = document.getElementById('consoleOutput');
+        const originalLog = console.log;
+        const originalError = console.error;
+
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            const message = args.join(' ');
+            const div = document.createElement('div');
+            div.className = 'log';
+            div.textContent = `>>> ${message}`;
+            consoleOutput.appendChild(div);
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        };
+
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            const message = args.join(' ');
+            const div = document.createElement('div');
+            div.className = 'error';
+            div.textContent = `!!! ${message}`;
+            consoleOutput.appendChild(div);
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        };
+
+        // 加载 WASM 模块
+        async function init() {
+            try {
+                wasmInstance = await loadAutoZigWasm('./autozig_wasm64print.wasm');
+                
+                document.getElementById('status').className = 'status ready';
+                document.getElementById('status').textContent = '✅ WASM 模块已就绪！';
+                
+                console.log('');
+                console.log('='.repeat(50));
+                console.log('点击按钮测试 console_log! 宏功能');
+                console.log('='.repeat(50));
+            } catch (error) {
+                document.getElementById('status').className = 'status error';
+                document.getElementById('status').textContent = '❌ 加载失败：' + error.message;
+                console.error('Failed to initialize:', error);
+            }
+        }
+
+        // 测试函数
+        window.testAdd = function() {
+            console.log('\n📝 Testing add(10, 20)...');
+            const result = wasmInstance.exports.add(10, 20);
+            console.log(`Result returned to JS: ${result}`);
+        };
+
+        window.testFactorial = function() {
+            console.log('\n📝 Testing factorial(5)...');
+            const result = wasmInstance.exports.factorial(5);
+            console.log(`Result returned to JS: ${result}`);
+        };
+
+        window.testGreet = function() {
+            console.log('\n📝 Testing greet("WASM64")...');
+            // 注意：字符串参数需要通过内存传递
+            // 这里简化处理，实际需要 allocate_string 等辅助函数
+            console.log('Note: String parameters require memory allocation helpers');
+        };
+
+        window.testGreetCustom = function() {
+            const name = document.getElementById('nameInput').value;
+            console.log(`\n📝 Testing greet("${name}")...`);
+            console.log('Note: String parameters require memory allocation helpers');
+        };
+
+        window.testSumArray = function() {
+            console.log('\n📝 Testing sum_array([1, 2, 3, 4, 5])...');
+            console.log('Note: Array parameters require memory allocation helpers');
+        };
+
+        window.testDivide = function() {
+            console.log('\n📝 Testing divide(10, 2)...');
+            const result1 = wasmInstance.exports.divide(10, 2);
+            console.log(`Result returned to JS: ${result1}`);
+            
+            console.log('\n📝 Testing divide(10, 0) [error case]...');
+            const result2 = wasmInstance.exports.divide(10, 0);
+            console.log(`Result returned to JS: ${result2}`);
+        };
+
+        window.testPanic = function() {
+            console.log('\n⚠️  WARNING: About to trigger panic!');
+            console.log('This will test the panic hook...');
+            
+            setTimeout(() => {
+                try {
+                    wasmInstance.exports.test_panic();
+                } catch (e) {
+                    console.error('Caught panic:', e);
+                }
+            }, 1000);
+        };
+
+        // 启动初始化
+        init();
+    </script>
+</body>
+</html>

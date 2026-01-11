@@ -32,6 +32,7 @@ members = [
     "engine",
     "gen/build",
     "macro",
+    "autozig-console",
     "demo",
     "examples/structs",
     "examples/enums",
@@ -54,7 +55,8 @@ members = [
     "examples/array_param_test",
     "examples/array_ffi",
     "examples/abi_test",
-    "examples/ffi_allocator"
+    "examples/ffi_allocator",
+    "examples/wasm64print"
 ]
 
 [features]
@@ -63,3 +65,22 @@ build = []
 # Enable stream support for async FFI
 stream = ["tokio", "futures"]
 default = []
+
+# Profile 优化：大幅减少 target 目录体积
+[profile.dev]
+# 保留基本调试信息（行号），比 true (debug=2) 体积小 50%
+debug = 1
+# Linux 下加快链接速度，减少磁盘 IO
+split-debuginfo = "unpacked"
+
+# 关键配置：关闭依赖库的 debug 信息，大幅减少磁盘占用
+[profile.dev.package."*"]
+opt-level = 0
+debug = 0           # 依赖库不需要 debug 符号
+strip = "symbols"   # 剥离符号表
+
+[profile.release]
+opt-level = 3
+lto = "thin"        # 启用瘦 LTO，平衡编译速度和性能
+codegen-units = 16
+strip = "symbols"   # Release 模式也剥离符号表
