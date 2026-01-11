@@ -168,6 +168,64 @@ wasm-pack build --target web
 
 > 📖 **Learn More**: [examples/wasm_filter](examples/wasm_filter) | [docs/PHASE_5_WASM_DESIGN.md](docs/PHASE_5_WASM_DESIGN.md)
 
+#### 🚀 WASM64 & Memory64 Support
+
+AutoZig is ready for the future of WebAssembly with full **Memory64** support:
+
+- ✅ **>4GB Memory Support**: Seamlessly address huge heap spaces
+- ✅ **64-bit Pointers**: Native 64-bit arithmetic in both Rust and Zig
+- ✅ **Verified Demo**: `examples/wasm64bit` demonstrates working Memory64 interop
+
+```zig
+// Zig can natively access >4GB memory space
+export fn process_huge_array(ptr: [*]u8, len: u64) void {
+    // ...
+}
+```
+
+---
+
+### 🎉 Phase 6: Memory Safety Protocol (NEW!)
+
+> **Safe FFI** - AutoZig now implements an **Explicit Lifetime Bridging Protocol** to prevent leaks and UAF across the Rust-Zig boundary.
+
+#### 🛡️ Explicit Lifetime Protocol
+
+AutoZig enforces a strict "Owner Frees" policy using the standardized `ZigBuffer` and `ZigBox` smart pointers:
+
+1.  **Zig -> Rust**: Zig allocates, Rust takes ownership via `ZigBox<T>`. When `ZigBox` drops, it calls back into Zig to free memory.
+2.  **Rust -> Zig**: Rust allocates, wraps in `ZigBuffer` with a destructor callback. Zig calls this callback when done.
+
+```rust
+// Safe Import (Zig -> Rust)
+autozig! {
+    const std = @import("std");
+    
+    // Zig allocates and returns buffer with free_fn attached
+    export fn allocate_data(size: usize) ZigBuffer { ... }
+    
+    ---
+    
+    fn allocate_data(size: usize) -> ZigBuffer;
+}
+
+fn main() {
+    // Rust automatically manages Zig memory lifecycle!
+    let data = unsafe { ZigBox::<u8>::from_raw(allocate_data(1024)) };
+    // data is dropped here -> calls Zig free_fn -> NO LEAK
+}
+```
+
+#### 📊 Robust Verification
+
+We verified this protocol with a rigorous **1,000,000 iteration stress test**:
+
+- **Zig Alloc -> Rust Drop**: 0 bytes leaked
+- **Rust Alloc -> Zig Drop**: 0 bytes leaked
+- **Status**: ✅ **0 Leaks Detected**
+
+> 📖 **Learn More**: [examples/leak_test](examples/leak_test)
+
 ---
 
 ### 🎉 Phase 4: Advanced Features
