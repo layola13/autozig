@@ -203,8 +203,15 @@ impl<T> ZeroCopyBuffer<T> {
 
     /// Convert this buffer into a `Vec<T>` with zero-copy
     ///
-    /// This consumes the `ZeroCopyBuffer` and transfers ownership to Rust's
-    /// `Vec` allocator.
+    /// # Safety
+    ///
+    /// This requires the Zig allocator to be compatible with the Rust allocator
+    /// (e.g. `std.heap.c_allocator` and system allocator). For a safer,
+    /// allocator-independent transfer, use `ZigBuffer` and `ZigBox`.
+    #[deprecated(
+        note = "Use ZigBox for safe ownership transfer. This method requires shared allocator \
+                assumptions."
+    )]
     #[inline]
     pub fn into_vec(self) -> Vec<T> {
         unsafe { self.raw.into_vec() }
@@ -243,6 +250,7 @@ impl<T> ZeroCopyBuffer<T> {
 
 impl<T> From<ZeroCopyBuffer<T>> for Vec<T> {
     #[inline]
+    #[allow(deprecated)]
     fn from(buffer: ZeroCopyBuffer<T>) -> Self {
         buffer.into_vec()
     }
@@ -279,6 +287,7 @@ mod layout_tests {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
 
